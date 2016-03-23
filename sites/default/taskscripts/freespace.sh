@@ -1,5 +1,6 @@
 #!/bin/bash
 # freespace.sh - get the free space for a filesystem, output "$MBFREE $INODEFREE $PCTFREE $IPCTFREE"
+#RCCONFIG:RCREQUIREDARGS=1
 
 usage(){
 	cat <<"EOF"

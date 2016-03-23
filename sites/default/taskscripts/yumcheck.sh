@@ -1,5 +1,6 @@
 #!/bin/bash
 # yumcheck.sh - check if updates are needed
+#RCCONFIG:RCELEVATE=true
 
 usage(){
 	cat <<EOF

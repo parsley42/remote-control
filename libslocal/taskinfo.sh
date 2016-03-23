@@ -27,61 +27,64 @@ listsitetasks(){
 	fi
 }
 
-evaltaskline(){
-	functrap
-	local TASKLINE="$1"
-	local SITE=$2
-	eval ${TASKLINE#*:} # evaluate everything after the :
-	[ -n "$RCCOMMAND" ] && return 0
-	if [ -n "$RCSCRIPT" ]
-	then # If the script name was supplied, use that
-		[[ $RCSCRIPT != */* ]] && RCSCRIPT="$RCROOT/sites/$SITE/$RCSCRIPT"
-	else # otherwise assume it's XXX.sh
-		RCSCRIPT="$RCROOT/sites/$SITE/${RCSCRIPT}.sh"
-	fi
-	[ ! -e "$RCSCRIPT" ] && errorout "Can't find command/script for configured task: $TASKLINE"
-}
-
-# Get RCCOMMAND or RCSCRIPT (full path) for RCTASKNAME
+# Get RCCOMMAND or RCSCRIPT (full path) for RCTASKNAME, and configuration (RCELEVATE, etc.)
 gettaskconf(){
 	functrap
 	local RCTASKNAME=$1
 	local SITE
+	# Look for task configuration first - userconf first, then RCSITE, then default; first wins
 	if [ -e ~/.tasks.conf ]
 	then
 		RCTASKLINE=$(grep -h "^$RCTASKNAME:" ~/.tasks.conf || :)
-		if [ -n "$RCTASKLINE" ]
-		then
-			eval ${RCTASKLINE#*:}
-			[ -n "$RCCOMMAND" ] && return 0
-			[ ! -e "$RCSCRIPT" ] && errorout "Can't find path to script for user task $RCTASKNAME"
-		fi
 	fi
-	for SITE in "$RCSITE" default
-	do
-		TASKFILE="$RCROOT/sites/$SITE/tasks.conf"
-		if [ -e $TASKFILE ]
-		then
-			RCTASKLINE=$(grep -h "^$RCTASKNAME:" $TASKFILE || :)
-			if [ -n "$RCTASKLINE" ]
+	if [ -n "$RCTASKLINE" ]
+	then
+		eval ${RCTASKLINE#*:}
+		[ -n "$RCCOMMAND" ] && return 0 # for an RCCOMMAND, there's no script
+	else
+		for SITE in "$RCSITE" default
+		do
+			TASKFILE="$RCROOT/sites/$SITE/tasks.conf"
+			if [ -e "$TASKFILE" ]
 			then
-				eval ${RCTASKLINE#*:}
-				[ -n "$RCCOMMAND" ] && return 0
+				RCTASKLINE=$(grep -h "^$RCTASKNAME:" "$TASKFILE" || :)
+				if [ -n "$RCTASKLINE" ]
+				then
+					eval ${RCTASKLINE#*:}
+					[ -n "$RCCOMMAND" ] && return 0
+					break
+				fi
 			fi
-		fi
-		if [ -n "$RCSCRIPT" ]
+		done
+	fi
+	# Now look for the script itself, first check RCSCRIPT, then look in
+	# RCSITE/taskscripts/, then default/taskscripts/
+	if [ -n "$RCSCRIPT" ]
+	then
+		if [[ $RCSCRIPT != */* ]]
 		then
-			if [[ $RCSCRIPT != */* ]]
-			then
-				RCSCRIPT="$RCROOT/$SITE/sites/taskscripts/$RCSCRIPT"
-				break
-			else
-				break
-			fi
-		elif [ -e "$RCROOT/sites/$SITE/taskscripts/${RCTASKNAME}.sh" ]
-		then
-			RCSCRIPT="$RCROOT/sites/$SITE/taskscripts/${RCTASKNAME}.sh"
-		fi
-	done
-	[ ! -e "$RCSCRIPT" ] && errorout "No task script found at $RCSCRIPT" || :
+			RCSCRIPT="$RCROOT/$SITE/sites/taskscripts/$RCSCRIPT"
+		fi # if it contains a slash, it's assumed to be the full path
+	# Now search site directories
+	elif [ -e "$RCROOT/sites/$SITE/taskscripts/${RCTASKNAME}" ]
+	then
+		RCSCRIPT="$RCROOT/sites/$SITE/taskscripts/${RCTASKNAME}"
+	elif [ -e "$RCROOT/sites/$SITE/taskscripts/${RCTASKNAME}.sh" ]
+	then
+		RCSCRIPT="$RCROOT/sites/$SITE/taskscripts/${RCTASKNAME}.sh"
+	elif [ -e "$RCROOT/sites/default/taskscripts/${RCTASKNAME}" ]
+	then
+		RCSCRIPT="$RCROOT/sites/default/taskscripts/${RCTASKNAME}"
+	elif [ -e "$RCROOT/sites/default/taskscripts/${RCTASKNAME}.sh" ]
+	then
+		RCSCRIPT="$RCROOT/sites/default/taskscripts/${RCTASKNAME}.sh"
+	fi
+	[ ! -e "$RCSCRIPT" ] && errorout "No task script found for $RCTASKNAME" || :
+	RCSCRIPTCFGLINE=$(grep -h "^#RCCONFIG:" "$RCSCRIPT" || :)
+	if [ -n "$RCSCRIPTCFGLINE" ]
+	then
+		eval ${RCSCRIPTCFGLINE#*:}
+		# Configured task options override task defaults, so re-eval
+		[ -n "$RCTASKLINE" ] && eval ${RCTASKLINE#*:}
+	fi
 }

@@ -1,5 +1,6 @@
 #!/bin/bash
 # yumupdate.sh - job for patching remote servers
+#RCCONFIG:RCELEVATE=true;RCSCRIPTOPTS=":hr"
 
 usage(){
 	cat <<EOF

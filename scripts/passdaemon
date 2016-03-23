@@ -1,0 +1,81 @@
+#!/bin/bash -e
+# passdaemon.sh - read user's password and write it to a 0600 fifo
+# for other user scripts to use.
+
+RCDIR=$(dirname `readlink -f $0`)
+RCROOT=$(dirname $RCDIR)
+
+usage(){
+	cat <<EOF
+Usage
+passdaemon (-h|stop) - rc password daemon (defaults to starting)
+
+	-h - print this message
+	stop - stop a running passdaemon
+EOF
+	exit 1
+}
+
+[ "$1" = "-h" ] && usage
+
+# for functrap
+shopt -s expand_aliases
+# Source error functions
+. $RCROOT/libslocal/errhandle.sh
+
+if [ -e ~/.rcconfig ]
+then
+	. ~/.rcconfig
+	[ -z "$RCPASSPIPE" ] && errorout "RCPASSPIPE not defined in ~/.rcconfig"
+fi
+
+if [ -e "$RCPASSPIPE" ]
+then # Make sure it's kosher
+	[ ! -p "$RCPASSPIPE" ] && errorout "$RCPASSPIPE exists but is not a pipe/fifo"
+	[ $(stat -c %u "$RCPASSPIPE") -ne $(id -u) ] && "$RCPASSPIPE has wrong owner"
+	chmod 0600 "$RCPASSPIPE" # why check it when it's so cheap to set it?
+else # Create the pipe
+	mkfifo -m 0600 "$RCPASSPIPE"
+fi
+
+if [ "$1" = "stop" ]
+then
+	chmod 0700 "$RCPASSPIPE"
+	echo "Stopping passdaemon"
+	exit 0
+fi
+
+echo -n "Password required for elevation:"
+read -s RCSUDOPASS
+echo
+
+rcpipewriter(){
+	# Write the password to the pipe forever
+	while :
+	do
+		cat <<< "$RCSUDOPASS" > "$RCPASSPIPE"
+		[ "$(stat -c %a "$RCPASSPIPE")" != "600" ] && exit 1
+	done
+}
+
+rcpipewriter &
+RCPIPEWRITER=$!
+
+rcpipewatcher(){
+	local RCPIPEPROC=$1
+	while :
+	do
+		ps -p $RCPIPEPROC &>/dev/null || exit 1
+		if [ "$(stat -c %a "$RCPASSPIPE")" != "600" ]
+		then
+			pkill -9 $RCPIPEPROC &
+			read -t 1 DISCARD <> "$RCPASSPIPE"
+			chmod 600 "$RCPASSPIPE"
+			exit 1
+		fi
+		sleep 1
+	done
+}
+
+rcpipewatcher $RCPIPEWRITER &
+exit 0

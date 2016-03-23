@@ -1,0 +1,68 @@
+#!/bin/bash
+# dopatch - scheduled by 'patch' job to do the actual work of patching.
+# Usage: dopatch (-a <adminmail>) "<contact>" <host>
+
+source ~/.rcconfig
+
+source $RCROOT/libslocal/common.sh
+
+# Use bash getopts built-in for argument parsing
+while getopts ":a:" OPT
+do
+	case $OPT in
+	a)
+		RCADMINMAIL=${OPTARG}
+		;;
+	esac
+done
+
+# Shift away options so that required command arguments are now in $@
+shift $((OPTIND-1))
+
+CONTACT="$1"
+PATCHHOST="$2"
+
+LOG=$(mktemp /tmp/patch-XXXXXX.log)
+cleanup(){
+	if [ -e $LOG ]
+	then
+		mail -r $RCADMINMAIL -s "ERROR from patch script for $PATCHHOST, see log" $RCADMINMAIL < $LOG
+		rm -f $LOG
+	fi
+}
+trap 'cleanup' EXIT
+exec &> $LOG
+
+status "Calling yumupdate -r for $PATCHHOST"
+if rc yumupdate -r $PATCHHOST
+then
+	status "Patching succeeded, sleeping 2 minutes for host to complete reboot"
+	sleep 2m
+	for TRY in {1..10}
+	do
+		status "trying to ping $PATCHHOST"
+		rc ping $PATCHHOST && break || :
+		if [ $TRY -eq 10 ]
+		then
+			mail -r $RCADMINMAIL -s "FAILED patching of $PATCHHOST, didn't return after reboot" $RCADMINMAIL < $LOG
+			rm -f $LOG
+			exit 1
+		fi
+		echo "Host not awake after $TRY tries, sleeping 1 minute and trying again..."
+		sleep 1m
+	done
+	echo "$PATCHHOST is awake"
+	status "Sending notifications"
+	OSVER=$(rc cmd "cat /etc/system-release" $PATCHHOST) || OSVER="error"
+	KERNELVER=$(rc cmd "uname -srv" $PATCHHOST) || KERNELVER="error"
+	eval POSTPATCHSUBJECT=\""$RCPOSTPATCHSUBJECT"\"
+	# Several hoops to jump through to expand things the way we want...
+	eval POSTPATCHMESSAGE=\""$RCPOSTPATCHMESSAGE"\"
+	mail -r $RCADMINMAIL -s "$POSTPATCHSUBJECT" $CONTACT <<<"$POSTPATCHMESSAGE"
+	echo "Done"
+	mail -r $RCADMINMAIL -s "Patching succeeded for $PATCHHOST" $RCADMINMAIL < $LOG
+else
+	status "Patch/reboot failed, sending notify to sysadmin"
+	mail -r $RCADMINMAIL -s "FAILED patching on $PATCHHOST" $RCADMINMAIL < $LOG
+fi
+rm -f $LOG

@@ -1,0 +1,501 @@
+#!/bin/bash -e
+# rc - remote control w/ ssh, for general-purpose task automation
+
+RCDIR=$(dirname `readlink -f $0`)
+RCROOT=$(dirname $RCDIR)
+
+RCSSHOPTS="-o ConnectTimeout=5"
+
+[ -e ~/.rcconfig ] && source ~/.rcconfig
+
+shopt -s expand_aliases # for functrap
+# Functions for dealing with errors
+. $RCROOT/libslocal/errhandle.sh
+# Functions for resolving supplied hosts
+. $RCROOT/libslocal/hostlib.sh
+# For looking up a task
+. $RCROOT/libslocal/taskinfo.sh
+
+# Try to figure out the site to use
+if [ -z "$RCSITE" ] # environment variable overrides ~/.rcsite
+then
+	if [ -e ~/.rcsite ]
+	then
+		# ~/.rcsite should contain no more/less than RCSITE=xxx
+		. ~/.rcsite
+	else
+		# If there's only one site, default to that, otherwise just use default
+		RCSITECOUNT=$(ls $RCROOT/sites | grep -v default | wc -l)
+		if [ $RCSITECOUNT -gt 2 ]
+		then
+			errormsg "Multiple non-default sites found and RCSITE not set, falling back to default."
+			RCSITE=default
+		elif [ $RCSITECOUNT -eq 1 ]
+		then
+			RCSITE=$(ls $RCROOT/sites | grep -v default)
+		else
+			RCSITE=default
+		fi
+	fi
+fi
+if [ ! -d "$RCROOT/sites/$RCSITE" ]
+then
+	errorout "RCSITE ($RCSITE) refers to non-existent directory ($RCROOT/sites/$RCSITE)"
+fi
+
+# Default options - override rc.tasks
+# Every script should give a usage statement
+# when called with '-h'
+RCSCRIPTOPTS=":h"
+# By default, taskscripts require at least zero arguments
+RCREQUIREDARGS=0
+
+# Options string for rc
+RCOPTS=":d:DhH:o:s:St"
+usage(){
+	cat >&2 <<EOF
+Usage:
+rc - Run a remote shell script/command over ssh on one or more hosts,
+	 optionally with elevated privileges.
+
+rc list sites
+	List all sites
+rc list tasks (<site>|user)
+	List tasks
+rc list hostgroups
+	List hostgroups for the current site
+rc list hostgroup <group>
+	List all hosts in group <group>
+rc list jobs (site)
+	List all jobs for the current or specified site
+rc (options) cmd "<command>" (hostspec)
+	Run a single command
+rc (options) job <jobname> <joboptions> <jobargs>
+	Wrapper for exec'ing jobscripts/<job>
+rc (options) <task> (taskoptions) (taskarguments) (hostspec)
+	<task> is the name of the task to be run, e.g. 'whois'
+
+	(hostspec) is required for commands or if there is no default hostspec
+		for the task. It can be a single host (or alias), hostgroup, or
+		a space-separated combination of hosts, aliases and hostgroups.
+
+	(options) are options to rc which may override defaults from
+	tasks.conf files
+		-d <file>
+			use <file> for the task .defs (variable definitions) file, possibly
+			overriding a default
+		-D
+			dry-run, echo the output to be sent but don't send
+		-h (task)
+			print this help message or task help
+		-H <host> | "<host> <host> ..." | @HOSTGROUP
+			Override a default hostspec for a task
+		-o <dir>
+			Send output from task to <dir>/<hostname>.out
+		-s <site>
+			Use <site>
+		-S
+			Run multiple hosts in serial (default parallel)
+		-t
+			Set trace debugging during remote execution
+	(taskoptions)
+		'-h' will give usage for the task
+	(arguments) are any arguments required by the task
+EOF
+	exit 1
+}
+
+[ $# -eq 0 ] && usage
+
+taskhelp(){
+	gettaskconf $1
+	if [ -n "$RCSCRIPT" ]
+	then
+		exec $RCSCRIPT -h
+	else
+		echo "Help not available for $1"
+		exit 0
+	fi
+}
+
+# Loop through once to find command/task, process non-override options
+while getopts "$RCOPTS" OPT
+do
+case $OPT in
+	h)
+		shift $((OPTIND - 1))
+		if [ -n "$1" ]
+		then
+			taskhelp $1
+		else
+			usage
+		fi
+		;;
+	D)
+		RCDRYRUN=true
+		;;
+	o)
+		if [ ! -d ${OPTARG} ]
+		then
+			errorout "Directory ${OPTARG} doesn't exist"
+		fi
+		RCOUTPUTDIR=${OPTARG}
+		;;
+	s)
+		RCSITE=${OPTARG}
+		if [ ! -d "$RCROOT/sites/$RCSITE" ]
+		then
+			errorout "RCSITE ($RCSITE) refers to non-existent directory ($RCROOT/sites/$RCSITE)"
+		fi
+		;;
+	S)
+		RCSERIAL=true
+		;;
+	t)
+		RCTRACE=true
+		;;
+	:)
+		echo "Option -$OPTARG requires an argument." >&2
+		usage
+		;;
+	\?)
+		echo "Invalid option: -$OPTARG" >&2
+		usage
+		;;
+esac
+done
+
+[ -e $RCROOT/sites/$RCSITE/rc.conf ] && source $RCROOT/sites/$RCSITE/rc.conf
+
+# Get the args, up to three
+RCARGNUM1=$OPTIND
+RCARGNUM2=$((OPTIND + 1))
+RCARGNUM3=$((OPTIND + 2))
+RCARG1=${!RCARGNUM1}
+RCARG2=${!RCARGNUM2}
+RCARG3=${!RCARGNUM3}
+
+case $RCARG1 in
+	cmd)
+		[ -z "$RCARG2" ] && errorout "missing command"
+		RCCOMMAND="$RCARG2"
+		[ -z "$RCARG3" ] && errorout "missing hostspec"
+		RCREMOTEHOSTS=$(resolvehostlist $RCARG3) || exit 1
+		RCSHIFT=3
+		;;
+	job)
+		RCJOB=$RCARG2
+		# shift away rc options and arguments, the rest go to the job
+		shift $((OPTIND + 1))
+		export RCROOT # jobs may need to know this, for e.g. including libslocal/(lib).sh
+		export RCSITE # make sure jobs run in the correct site
+		for SITE in $RCSITE default
+		do
+			RCJOBSCRIPT="$RCROOT/sites/$SITE/jobscripts/$RCJOB"
+			[ -e "$RCJOBSCRIPT" ] && exec $RCJOBSCRIPT "$@" || :
+		done
+		errorout "Job $RCJOB not found."
+		;;
+	list)
+		[ -z "$RCARG2" ] && errorout "Missing argument to list command"
+		case "$RCARG2" in
+			jobs)
+				RCSITE=${RCARG3:-$RCSITE}
+				for SITE in $RCSITE default
+				do
+					RCJOBLIST=$(ls -A $RCROOT/sites/$SITE/jobscripts/ 2>/dev/null || :)
+					[ -n "$RCJOBLIST" ] && echo -e "### Jobs for site $SITE:\n$RCJOBLIST"
+				done
+				exit 0
+				;;
+			tasks)
+				[ -e ~/.tasks.conf -a \( -z "$RCARG3" -o "$RCARG3" = "user" \) ] && { echo "### User tasks:"; grep -v "^#" ~/.tasks.conf | grep -v '^$'; }
+				[ "$RCARG3" = "user" ] && exit 0
+				listsitetasks $RCARG3
+				if [ -z "$RCARG3" ]
+				then
+					listsitetasks default
+				fi
+				exit 0
+				;;
+			sites)
+				ls -d $RCROOT/sites/* | xargs basename -a
+				exit 0
+				;;
+			hostgroups)
+				[ -n "$(ls -A $RCROOT/sites/$RCSITE/hostgroups)" ] && \
+					ls -d $RCROOT/sites/$RCSITE/hostgroups/* | xargs basename -s .hosts
+				exit 0
+				;;
+			hostgroup)
+				[ -z "$RCARG3" ] && errorout "Missing group name to list hostgroup command"
+				RCREMOTEHOSTS=$(resolvehostgroup $RCARG3) || exit 1
+				for RCHOST in $RCREMOTEHOSTS
+				do
+					echo "$(hostnicename $RCHOST) -> $RCHOST"
+				done
+				exit 0
+				;;
+			*)
+				errorout "Don't know how to list $RCARG2"
+				;;
+		esac
+		;;
+	*)
+		RCTASKNAME=$RCARG1
+		# Special case: handle rc <task> -h
+		[ "$RCARG2" = "-h" ] && taskhelp $RCTASKNAME
+		# Get task defaults
+		if [ -n "$RCTASKNAME" ]
+		then
+			gettaskconf $RCTASKNAME
+		fi
+		# Resolve remote hosts
+		if [ -n "$RCREMOTEHOSTS" ]
+		then
+			RCREMOTEHOSTS=$(resolvehostlist $RCREMOTEHOSTS)
+			RCSHIFT=1 # no hosts required
+		else # If there was no default, last argument needs to be the host spec
+			# Create an array from the positional parameters
+			RCARGARR=("$@")
+			# Resolve hosts from the last element
+			RCREMOTEHOSTS=$(resolvehostlist ${RCARGARR[-1]})
+			# Remove the last element
+			((RCLASTARG=${#RCARGARR[@]} - 1))
+			unset -v RCARGARR[$RCLASTARG]
+			# Re-set the positional parameters
+			set -- "${RCARGARR[@]}"
+			RCSHIFT=1 # hosts specified on cmdline
+		fi
+		;;
+esac
+
+# Rewind for full option processing
+OPTIND=1
+
+# Now process options for rc, which can override defaults from ~/.tasks.conf
+while getopts "$RCOPTS" OPT
+do
+	case $OPT in
+		d)
+			RCSCRIPTDEFS=${OPTARG}
+			;;
+		H)
+			RCREMOTEHOSTS=$(resolvehostlist ${OPTARG})
+			;;
+		-)
+			break
+			;;
+	esac
+done
+
+# Shift away rc options and taskname
+shift $((OPTIND - 1))
+# Shift away arguments; remaining options and args
+# are for the task
+shift $RCSHIFT
+
+if [ -n "$RCSCRIPT" ] # Processing for an RCSCRIPT
+then
+	# Cycle through the task options so we can check # of args
+	while getopts "$RCSCRIPTOPTS" OPT
+	do
+		[ "$OPT" = "h" ] && exec $RCSCRIPT -h
+	done
+	ARGS=$(($# - (OPTIND - 1) ))
+	# If not enough args given, display usage
+	[ $# -lt $RCREQUIREDARGS ] && exec $RCSCRIPT -h
+else # RCCOMMAND, not RCSCRIPT
+	if [ $# -lt $RCREQUIREDARGS ]
+	then
+		errorout "$RCCOMMAND requires at least $RCREQUIREDARGS argument(s)"
+	fi
+fi
+
+[ -z "$RCREMOTEHOSTS" ] && errorout "No remote host set!"
+
+# If a defs file is required, make sure it exists
+if [ -n "$RCSCRIPTDEFS" -a ! -e "$RCSCRIPTDEFS" ]
+then
+	errorout "$RCSCRIPT requires definitions file $RCSCRIPTDEFS"
+fi
+
+# Create the SETSTRING for passing arguments to the remote host
+if [ $# -gt 0 -a -z "$RCCOMMAND" ]
+then
+	SETSTRING="set -- \"$1\""
+	shift
+	while [ -n "$1" ]
+	do
+		SETSTRING="$SETSTRING \"$1\""
+		shift
+	done
+fi
+
+# Get a password for sudo if required
+if [ "$RCELEVATE" = "true" -a -z "$RCDRYRUN" ]
+then
+	# Try reading from RCPASSPIPE first
+	if [ "${RCELEVATETYPE:=SUDOPASS}" = "SUDOPASS" ]
+	then
+		if [ -n "$RCPASSPIPE" ]
+		then
+			[ ! -e "$RCPASSPIPE" ] && mkfifo -m 0600 "$RCPASSPIPE" || :
+			while [ -z "$RCSUDOPASS" ]
+			do
+				read -t 1 RCSUDOPASS <> "$RCPASSPIPE" || $RCROOT/scripts/passdaemon
+			done
+		fi
+		if [ -z "$RCSUDOPASS" ]
+		then
+			echo -n "Password for sudo:"
+			read -s RCSUDOPASS
+			echo
+		fi
+	fi
+fi
+
+# Piper generates the input to ssh, which amounts to a shell script run
+# in immediate mode
+piper(){
+	local RCHOST=$1
+	shift
+	# If we're sudo'ing, take care of that first
+	if [ -n "$RCELEVATE" ]
+	then
+		case $RCELEVATETYPE in
+			SUDOPASS)
+				# To supply a sudo password we have to jump through some hoops
+				# with a very temporary sudo askpass helper script
+				RCASKPASS=/tmp/rc-helper-$(date | md5sum | cut -f 1 -d' ').sh
+				echo "export SUDO_ASKPASS=$RCASKPASS"
+				echo "echo '#!/bin/bash' > $RCASKPASS"
+				[ -n "$RCDRYRUN" ] && echo "RCSUDOPASS=\"echo <password>\""
+				if [ -z "$RCDRYRUN" ]
+				then
+					[ -n "$RCTRACE" ] && echo "set +x"
+					echo "RCSUDOPASS=\"echo $RCSUDOPASS\""
+					[ -n "$RCTRACE" ] && echo "set -x"
+				fi
+				cat $RCROOT/libsremote/sudosetup.sh
+				echo "rm -f $RCASKPASS"
+				;;
+			SUDONOPASS)
+				# When there's no password required, we just sudo su
+				echo "sudo su <<\"RCSUDOSCRIPTEOF\""
+				;;
+			ROOTLOGIN)
+				unset RCELEVATE # so we don't bother closing sudo later
+				;;
+		esac
+	fi
+	echo "set -e"
+	RCTASKID=$(dd if=/dev/urandom bs=16 count=1 2>/dev/null | md5sum | cut -f 1 -d' ')
+	[ -n "$RCTRACE" ] && echo "set -x"
+	# Set the task ID
+	echo "RCTASKID=$RCTASKID"
+	cat $RCROOT/libsremote/errtrap.sh
+	# If there's a .defs file, add it in
+	[ -n "$RCSCRIPTDEFS" ] && cat $RCSCRIPTDEFS || :
+	# Set the positional values, options and arguments
+	[ -n "$SETSTRING" ] && echo "$SETSTRING" || :
+	echo "echo $RCTASKID task starting on $RCHOST: $(basename $RCSCRIPT) >&2"
+	# Make note of the line before the script starts
+	echo "RCFIRSTLINE=\$LINENO"
+	# Finally, run the task
+	cat $RCSCRIPT
+	# Close the sudo verbatim heredoc started in sudosetup.sh
+	[ -n "$RCSUDOPASS" ] && echo "RCSUDOSCRIPTEOF" || :
+}
+
+# Should output go to files?
+RCHOSTARRAY=($RCREMOTEHOSTS)
+RCNUMHOSTS=${#RCHOSTARRAY[@]}
+if [ -n "$RCOUTPUTDIR" -o \( $RCNUMHOSTS -gt 1 -a -z "$RCSERIAL" \) ]
+then
+	if [ -n "$RCOUTPUTDIR" ]
+	then
+		[ ! -d "$RCOUTPUTDIR" ] && errorout "Output dir $RCOUTPUTDIR doesn't exist"
+		RCOUTPUTDIR=${RCOUTPUTDIR%/}
+	else
+		RCTEMPDIR=true
+		RCOUTPUTDIR=$(mktemp -d /tmp/rcout-XXXXXX)
+	fi
+	echo "Output will be logged to $RCOUTPUTDIR/<host>.(out|err)"
+	[ -z "$RCSERIAL" -a $RCNUMHOSTS -gt 1 ] && RCPARALLEL=true # multiple hosts, run in background
+fi
+
+hosterrorcheck(){
+	RCRETVAL=$?
+	# Turn error trapping back on
+	set -e
+	trap 'error_handler "${BASH_COMMAND}" ${LINENO} $?' ERR
+	if [ $RCRETVAL -ne 0 ]
+	then
+		if [ $RCRETVAL -eq 255 ]
+		then
+			echo "ssh process exited with error connecting to $RCREMOTE, exit code:255" >&2
+		else
+			echo "Remote host $RCREMOTE exited with error code:$RCRETVAL" >&2
+		fi
+		if [ $RCNUMHOSTS -eq 1 ]
+		then
+			# If we're operating on a single host and it fails,
+			# exit with the same error code.
+			trap - ERR
+			exit $RCRETVAL
+		fi
+	fi
+}
+
+[ -z "$RCTASKNAME" ] && RCTASKNAME="$RCCOMMAND" || :
+for RCREMOTE in $RCREMOTEHOSTS
+do
+	RCNICEHOST=$(hostnicename $RCREMOTE)
+	if [ -n "$RCDRYRUN"  ]
+	then
+		echo "*** DRY RUN ***" >&2
+		echo "*** Sending \"$RCTASKNAME\" to $RCNICEHOST" >&2
+		[ -n "$RCCOMMAND" ] && echo "$RCCOMMAND $*"
+		[ -n "$RCSCRIPT" ] && piper $RCNICEHOST $*
+	else
+		echo "*** Sending \"$RCTASKNAME\" to $RCNICEHOST" >&2
+		# Don't error out or trap if ssh returns an error
+		set +e
+		trap - ERR
+		# Send the script to the remote host over ssh
+		if [ -n "$RCPARALLEL" ]
+		then
+			if [ -n "$RCSCRIPT" ]
+			then
+				piper $RCNICEHOST $* | (
+					ssh $RCSSHOPTS -T $RCREMOTE > $RCOUTPUTDIR/$RCREMOTE.out 2> $RCOUTPUTDIR/$RCREMOTE.err
+					hosterrorcheck
+				) &
+			else
+				(	ssh $RCSSHOPTS -T $RCREMOTE "$RCCOMMAND $*" > $RCOUTPUTDIR/$RCREMOTE.out 2> $RCOUTPUTDIR/$RCREMOTE.err
+					hosterrorcheck
+				) &
+			fi
+			# Turn error trapping back on
+			set -e
+			trap 'error_handler "${BASH_COMMAND}" ${LINENO} $?' ERR
+		else
+			if [ -z "$RCOUTPUTDIR" ]
+			then
+				[ -n "$RCSCRIPT" ] && { piper $RCNICEHOST $* | ssh $RCSSHOPTS -T $RCREMOTE; hosterrorcheck; }
+				[ -n "$RCCOMMAND" ] && { ssh $RCSSHOPTS -T $RCREMOTE "$RCCOMMAND $*"; hosterrorcheck; }
+			else
+				[ -n "$RCSCRIPT" ] && { piper $RCNICEHOST $* | ssh $RCSSHOPTS -T $RCREMOTE > $RCOUTPUTDIR/$RCREMOTE.out 2> $RCOUTPUTDIR/$RCREMOTE.err; hosterrorcheck; }
+				[ -n "$RCCOMMAND" ] && { ssh $RCSSHOPTS -T $RCREMOTE "$RCCOMMAND $*" > $RCOUTPUTDIR/$RCREMOTE.out 2> $RCOUTPUTDIR/$RCREMOTE.err; hosterrorcheck; }
+			fi
+		fi
+	fi
+done
+if [ -n "$RCPARALLEL" ]
+then
+	echo "... waiting for all hosts to finish"
+	wait
+fi
+
+# this space intentionally left blank

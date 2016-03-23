@@ -1,0 +1,2 @@
+# site to use if RCSITE not set in environment
+#RCSITE=awsmain

@@ -1,0 +1,5 @@
+# Host group file format: full name/ip followed by aliases, last alias
+# is hostnicename. Hosts can appear in multiple host groups, but in that
+# case host lines should be identical.
+#c7dev.test.dom
+#fed23dev.test.com

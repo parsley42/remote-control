@@ -69,4 +69,4 @@ Planned features / TODO items:
 
 rc is currently still in flux. The command-line syntax probably won't change much, and the basic layout of site directories, but location and format of configuration files is still evolving. I just wanted to go ahead and push a version out to the world in case there are other bash afficionados who are looking for an alternative to ansible for automation and system configuration. So far there's not a big library of tasks and jobs, but I expect that to grow rapidly now that the basic structure is functioning.
 
-If you're interested in using / hacking on this, shoot me an e-mail at parsley at linuxjedi dot org.
+If you're interested in using / hacking on this, shoot me an e-mail at parsley at linuxjedi dot org. Taking a line from ESR - "release early, release often"

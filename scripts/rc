@@ -24,17 +24,16 @@ then
 		# ~/.rcsite should contain no more/less than RCSITE=xxx
 		. ~/.rcsite
 	else
-		# If there's only one site, default to that, otherwise just use default
-		RCSITECOUNT=$(ls $RCROOT/sites | grep -v default | wc -l)
+		# If there's only one site, default to that
+		RCSITECOUNT=$(ls $RCROOT/sites | wc -l)
 		if [ $RCSITECOUNT -gt 2 ]
 		then
-			errormsg "Multiple non-default sites found and RCSITE not set, falling back to default."
-			RCSITE=default
+			errorout "Multiple sites found and RCSITE not set, aborting."
 		elif [ $RCSITECOUNT -eq 1 ]
 		then
-			RCSITE=$(ls $RCROOT/sites | grep -v default)
+			RCSITE=$(ls $RCROOT/sites)
 		else
-			RCSITE=default
+			errorout "At least one site required in $RCROOT/sites"
 		fi
 	fi
 fi
@@ -189,9 +188,9 @@ case $RCARG1 in
 		shift $((OPTIND + 1))
 		export RCROOT # jobs may need to know this, for e.g. including libslocal/(lib).sh
 		export RCSITE # make sure jobs run in the correct site
-		for SITE in $RCSITE default
+		for RCJOBDIR in sites/$RCSITE sites/common defaultsite
 		do
-			RCJOBSCRIPT="$RCROOT/sites/$SITE/jobscripts/$RCJOB"
+			RCJOBSCRIPT="$RCROOT/$RCJOBDIR/jobscripts/$RCJOB"
 			[ -e "$RCJOBSCRIPT" ] && exec $RCJOBSCRIPT "$@" || :
 		done
 		errorout "Job $RCJOB not found."
@@ -201,10 +200,10 @@ case $RCARG1 in
 		case "$RCARG2" in
 			jobs)
 				RCSITE=${RCARG3:-$RCSITE}
-				for SITE in $RCSITE default
+				for SITE in "sites/$RCSITE" sites/common defaultsite
 				do
-					RCJOBLIST=$(ls -A $RCROOT/sites/$SITE/jobscripts/ 2>/dev/null || :)
-					[ -n "$RCJOBLIST" ] && echo -e "### Jobs for site $SITE:\n$RCJOBLIST"
+					RCJOBLIST=$(ls -A $RCROOT/$SITE/jobscripts/ 2>/dev/null || :)
+					[ -n "$RCJOBLIST" ] && echo -e "### Jobs for $SITE:\n$RCJOBLIST"
 				done
 				exit 0
 				;;

@@ -24,17 +24,16 @@ then
 		# ~/.rcsite should contain no more/less than RCSITE=xxx
 		. ~/.rcsite
 	else
-		# If there's only one site, default to that, otherwise just use default
-		RCSITECOUNT=$(ls $RCROOT/sites | grep -v default | wc -l)
+		# If there's only one site, default to that
+		RCSITECOUNT=$(ls $RCROOT/sites | wc -l)
 		if [ $RCSITECOUNT -gt 2 ]
 		then
-			errormsg "Multiple non-default sites found and RCSITE not set, falling back to default."
-			RCSITE=default
+			errorout "Multiple sites found and RCSITE not set, aborting."
 		elif [ $RCSITECOUNT -eq 1 ]
 		then
-			RCSITE=$(ls $RCROOT/sites | grep -v default)
+			RCSITE=$(ls $RCROOT/sites)
 		else
-			RCSITE=default
+			errorout "At least one site required in $RCROOT/sites"
 		fi
 	fi
 fi
@@ -109,9 +108,9 @@ EOF
 
 taskhelp(){
 	gettaskconf $1
-	if [ -n "$RCSCRIPT" ]
+	if [ -n "$RCSCRIPTPATH" ]
 	then
-		exec $RCSCRIPT -h
+		exec $RCSCRIPTPATH -h
 	else
 		echo "Help not available for $1"
 		exit 0
@@ -189,22 +188,22 @@ case $RCARG1 in
 		shift $((OPTIND + 1))
 		export RCROOT # jobs may need to know this, for e.g. including libslocal/(lib).sh
 		export RCSITE # make sure jobs run in the correct site
-		for SITE in $RCSITE default
+		for RCJOBDIR in sites/$RCSITE sites/common defaultsite
 		do
-			RCJOBSCRIPT="$RCROOT/sites/$SITE/jobscripts/$RCJOB"
+			RCJOBSCRIPT="$RCROOT/$RCJOBDIR/jobscripts/$RCJOB"
 			[ -e "$RCJOBSCRIPT" ] && exec $RCJOBSCRIPT "$@" || :
 		done
-		errorout "Job $RCJOB not found."
+		errorout "Job \"$RCJOB\" not found, maybe it's just a task?"
 		;;
 	list)
 		[ -z "$RCARG2" ] && errorout "Missing argument to list command"
 		case "$RCARG2" in
 			jobs)
 				RCSITE=${RCARG3:-$RCSITE}
-				for SITE in $RCSITE default
+				for SITE in "sites/$RCSITE" sites/common defaultsite
 				do
-					RCJOBLIST=$(ls -A $RCROOT/sites/$SITE/jobscripts/ 2>/dev/null || :)
-					[ -n "$RCJOBLIST" ] && echo -e "### Jobs for site $SITE:\n$RCJOBLIST"
+					RCJOBLIST=$(ls -A $RCROOT/$SITE/jobscripts/ 2>/dev/null || :)
+					[ -n "$RCJOBLIST" ] && echo -e "### Jobs for $SITE:\n$RCJOBLIST"
 				done
 				exit 0
 				;;
@@ -212,10 +211,9 @@ case $RCARG1 in
 				[ -e ~/.tasks.conf -a \( -z "$RCARG3" -o "$RCARG3" = "user" \) ] && { echo "### User tasks:"; grep -v "^#" ~/.tasks.conf | grep -v '^$'; }
 				[ "$RCARG3" = "user" ] && exit 0
 				listsitetasks $RCARG3
-				if [ -z "$RCARG3" ]
-				then
-					listsitetasks default
-				fi
+				[ -n "$RCARG3" ] && exit 0
+				listsitetasks common
+				listsitetasks defaultsite
 				exit 0
 				;;
 			sites)
@@ -300,11 +298,11 @@ then
 	# Cycle through the task options so we can check # of args
 	while getopts "$RCSCRIPTOPTS" OPT
 	do
-		[ "$OPT" = "h" ] && exec $RCSCRIPT -h
+		[ "$OPT" = "h" ] && exec $RCSCRIPTPATH -h
 	done
 	ARGS=$(($# - (OPTIND - 1) ))
 	# If not enough args given, display usage
-	[ $# -lt $RCREQUIREDARGS ] && exec $RCSCRIPT -h
+	[ $# -lt $RCREQUIREDARGS ] && exec $RCSCRIPTPATH -h
 else # RCCOMMAND, not RCSCRIPT
 	if [ $# -lt $RCREQUIREDARGS ]
 	then
@@ -314,10 +312,20 @@ fi
 
 [ -z "$RCREMOTEHOSTS" ] && errorout "No remote host set!"
 
-# If a defs file is required, make sure it exists
-if [ -n "$RCSCRIPTDEFS" -a ! -e "$RCSCRIPTDEFS" ]
+# If a defs file is required, search for it
+if [ -n "$RCSCRIPTDEFS" ]
 then
-	errorout "$RCSCRIPT requires definitions file $RCSCRIPTDEFS"
+	if [[ "$RCSCRIPTDEFS" = */* ]]
+	then
+		[ ! -e "$RCSCRIPTDEFS" ] && errorout "$RCSCRIPT requires definitions file $RCSCRIPTDEFS"
+		RCSCRIPTDEFSPATH="$RCSCRIPTDEFS"
+	else
+		for RCSEARCHPATH in sites/$RCSITE sites/common defaultsite failed
+		do
+			[ "$RCSEARCHPATH" = "failed" ] && { errorout "Couldn't locate defs file $RCSCRIPTDEFS"; }
+			[ -e "$RCROOT/$RCSEARCHPATH/$RCSCRIPTDEFS" ] && { RCSCRIPTDEFSPATH="$RCROOT/$RCSEARCHPATH/$RCSCRIPTDEFS"; break; }
+		done
+	fi
 fi
 
 # Create the SETSTRING for passing arguments to the remote host
@@ -396,14 +404,14 @@ piper(){
 	echo "RCTASKID=$RCTASKID"
 	cat $RCROOT/libsremote/errtrap.sh
 	# If there's a .defs file, add it in
-	[ -n "$RCSCRIPTDEFS" ] && cat $RCSCRIPTDEFS || :
+	[ -n "$RCSCRIPTDEFSPATH" ] && cat $RCSCRIPTDEFSPATH || :
 	# Set the positional values, options and arguments
 	[ -n "$SETSTRING" ] && echo "$SETSTRING" || :
 	echo "echo $RCTASKID task starting on $RCHOST: $(basename $RCSCRIPT) >&2"
 	# Make note of the line before the script starts
 	echo "RCFIRSTLINE=\$LINENO"
 	# Finally, run the task
-	cat $RCSCRIPT
+	cat $RCSCRIPTPATH
 	# Close the sudo verbatim heredoc started in sudosetup.sh
 	[ -n "$RCSUDOPASS" ] && echo "RCSUDOSCRIPTEOF" || :
 }

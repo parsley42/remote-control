@@ -60,7 +60,9 @@ then
 	eval POSTPATCHMESSAGE=\""$RCPOSTPATCHMESSAGE"\"
 	mail -r $RCADMINMAIL -s "$POSTPATCHSUBJECT" $CONTACT <<<"$POSTPATCHMESSAGE"
 	echo "Done"
-	mail -r $RCADMINMAIL -s "Patching succeeded for $PATCHHOST" $RCADMINMAIL < $LOG
+	MAILSUBJECT="Patching succeeded for $PATCHHOST"
+	[ grep -qi 'warn\|err' ] $LOG && MAILSUBJECT="Warning(s)/Error(s) while patching $PATCHHOST"
+	mail -r $RCADMINMAIL -s "$MAILSUBJECT" $RCADMINMAIL < $LOG
 else
 	status "Patch/reboot failed, sending notify to sysadmin"
 	mail -r $RCADMINMAIL -s "FAILED patching on $PATCHHOST" $RCADMINMAIL < $LOG

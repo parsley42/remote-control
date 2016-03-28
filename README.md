@@ -64,6 +64,24 @@ Planned features / TODO items:
  * localhost operation
  * a set of tasks and configure job for general-purpose system configuration
  * reasonable semantics and implementation of running jobs in parallel on multiple hosts
+ * a libsremote library for requiring non-standard packages; e.g. requirepkg jq
+
+## Requirements
+
+### SSH
+
+`rc` requires all hosts managed to be reachable via ssh `host`, and makes no
+provision for configurable bastion hosts or login user names, for example.
+While it's possible to configure aliases for hosts in a .hosts hostgroup file,
+the practice is discouraged, as such configuration should be in the user's
+`.ssh/config`.
+
+### Managed hosts
+
+As `rc` relies on `bash` for scripting, the reqrirements for managed hosts are
+fairly minimal. A somewhat recent version of bash (certainly bash 4+), GNU
+core utils, grep, sed and friends, and whatever other CLI commands are needed
+by your tasks.
 
 ## Sites
 
@@ -77,6 +95,14 @@ When searching for task configuration, tasks, jobs, and definitions files, rc se
 * sites/$RCSITE (from ~/.rcsite, RCSITE environment variable, or -s option)
 * sites/common
 * defaultsite
+
+## Definitions files
+
+Definitions files are simple snippets of bash scripts with variable
+definitions. A given task can specify the name of a definitions file to use,
+and rc will search for it as listed above. Additionally, if $RCSITE/site.defs
+exists, it will be sourced before the task-specified file (or one specified as
+an option to rc).
 
 ## Development state
 

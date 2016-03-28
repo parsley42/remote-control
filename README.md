@@ -67,7 +67,7 @@ Planned features / TODO items:
 
 ## Sites
 
-The rc `sites/` directory is for user content, and should be it's own separate git repository (not sub-module). `defaultsite` contains tasks and jobs that ship with rc; these are mostly examples for reference, though some of them may be useful for your site(s). `sites\common` is for tasks, task configurations, and jobs that are common to all the sites you manage. Other subdirectories of `sites/` are for grouping tasks, jobs and hostgroups. For example:
+The rc `sites/` directory is for user content, and should be it's own separate git repository (not sub-module). `defaultsite` contains tasks and jobs that ship with rc; these are mostly examples for reference, though some of them may be useful for your site(s). `sites/common` is for tasks, task configurations, and jobs that are common to all the sites you manage. Other subdirectories of `sites/` are for grouping tasks, jobs and hostgroups. For example:
 
 * sites/common - might contain a `deploy` task common to all of your sites
 * sites/mysite - might contain an `update` task and hostgroups for your site

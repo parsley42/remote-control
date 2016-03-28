@@ -65,6 +65,19 @@ Planned features / TODO items:
  * a set of tasks and configure job for general-purpose system configuration
  * reasonable semantics and implementation of running jobs in parallel on multiple hosts
 
+## Sites
+
+The rc `sites/` directory is for user content, and should be it's own separate git repository (not sub-module). `defaultsite` contains tasks and jobs that ship with rc; these are mostly examples for reference, though some of them may be useful for your site(s). `sites\common` is for tasks, task configurations, and jobs that are common to all the sites you manage. Other subdirectories of `sites/` are for grouping tasks, jobs and hostgroups. For example:
+
+* sites/common - might contain a `deploy` task common to all of your sites
+* sites/mysite - might contain an `update` task and hostgroups for your site
+* sites/mylegacysite - might contain an `update` task and hostgroups for your legacy servers
+
+When searching for task configuration, tasks, jobs, and definitions files, rc searches in this order:
+* sites/$RCSITE (from ~/.rcsite, RCSITE environment variable, or -s option)
+* sites/common
+* defaultsite
+
 ## Development state
 
 rc is currently still in flux. The command-line syntax probably won't change much, and the basic layout of site directories, but location and format of configuration files is still evolving. I just wanted to go ahead and push a version out to the world in case there are other bash afficionados who are looking for an alternative to ansible for automation and system configuration. So far there's not a big library of tasks and jobs, but I expect that to grow rapidly now that the basic structure is functioning.

@@ -1,6 +1,9 @@
 #!/bin/bash -e
 # yuminstall.sh - Install a defined set of os packages.
-#RCCONFIG:RCELEVATE=true;RCREQUIREDARGS=1;RSCRIPTSDEFS=~/.rcpackages
+
+# Package lists should be in packages.defs, probably in sites/common,
+# or possibly sites/<somesite>.
+#RCCONFIG:RCELEVATE=true;RCREQUIREDARGS=1;RCSCRIPTDEFS=packagelists.defs
 
 usage(){
 	cat <<EOF

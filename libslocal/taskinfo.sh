@@ -4,10 +4,7 @@
 # List all site tasks for list command
 listsitetasks(){
 	functrap
-	local RCSITESCRIPT
-	local RCSCRIPT
-	local SCRIPTCONF
-	local SITE
+	local RCSITESCRIPT RCSCRIPT SCRIPTCONF SITE RCTASKLINE
 	if [ "$1" = defaultsite ]
 	then
 		SITE=$1
@@ -17,7 +14,7 @@ listsitetasks(){
 	echo "### Tasks for $SITE:"
 	if [ -e "$RCROOT/$SITE/tasks.conf" ]
 	then
-		grep -v '^$' $RCROOT/$SITE/tasks.conf | grep -v '^#'
+		grep -v '^$' $RCROOT/$SITE/tasks.conf | grep -v '^#' | grep RCCOMMAND
 	fi
 	if [ -d "$RCROOT/$SITE/taskscripts" ]
 	then
@@ -27,16 +24,16 @@ listsitetasks(){
 			RCSCRIPT=$(basename $RCSITESCRIPT .sh)
 			if [ -e "$RCROOT/$SITE/tasks.conf" ]
 			then
-				if ! grep -q "^$RCSCRIPT:" "$RCROOT/$SITE/tasks.conf"
-				then
-					echo -n "$RCSCRIPT"
-					SCRIPTCONF=$(grep -h "^#RCCONFIG:" "$RCROOT/$SITE/taskscripts/$RCSITESCRIPT" || :)
-					echo :${SCRIPTCONF#*:}
-				fi
+				RCTASKLINE=$(grep -h "^$RCSCRIPT:" "$RCROOT/$SITE/tasks.conf" || :)
+			fi
+			SCRIPTCONF=$(grep -h "^#RCCONFIG:" "$RCROOT/$SITE/taskscripts/$RCSITESCRIPT" || :)
+			echo -n "$RCSCRIPT"
+			if [ -n "$SCRIPTCONF" ]
+			then
+				echo -n ":${SCRIPTCONF#*:}"
+				[ -n "$RCTASKLINE" ] && echo ";${RCTASKLINE#*:}" || echo
 			else
-				echo -n "$RCSCRIPT"
-				SCRIPTCONF=$(grep -h "^#RCCONFIG:" "$RCROOT/$SITE/taskscripts/$RCSITESCRIPT" || :)
-				echo :${SCRIPTCONF#*:}
+				[ -n "$RCTASKLINE" ] && echo ":${RCTASKLINE#*:}"
 			fi
 		done
 	fi

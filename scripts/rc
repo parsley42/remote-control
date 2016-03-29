@@ -50,7 +50,7 @@ RCSCRIPTOPTS=":h"
 RCREQUIREDARGS=0
 
 # Options string for rc
-RCOPTS=":d:DhH:o:s:St"
+RCOPTS=":d:DE:hH:o:s:St"
 usage(){
 	cat >&2 <<EOF
 Usage:
@@ -89,6 +89,8 @@ rc (options) <task> (taskoptions) (taskarguments) (hostspec)
 			print this help message or task help
 		-H <host> | "<host> <host> ..." | @HOSTGROUP
 			Override a default hostspec for a task
+		-E (lib ... lib)
+			Don't send remote libraries, e.g. -E errtrap.sh
 		-o <dir>
 			Send output from task to <dir>/<hostname>.out
 		-s <site>
@@ -285,6 +287,9 @@ do
 		d)
 			RCSCRIPTDEFS=${OPTARG}
 			;;
+		E)
+			RCEXCLUDELIBS="$RCEXCLUDELIBS ${OPTARG}"
+			;;
 		H)
 			resolvehostlist ${OPTARG}
 			[ -n "$RCREMOTEHOSTS" ] || errorout "Couldn't resolve any hosts from \"${OPTARG}\""
@@ -410,7 +415,14 @@ piper(){
 	[ -n "$RCTRACE" ] && echo "set -x"
 	# Set the task ID
 	echo "RCTASKID=$RCTASKID"
-	cat $RCROOT/libsremote/errtrap.sh
+	# Send libraries for remote use
+	for RCREMOTELIB in errtrap.sh
+	do
+		if ! echo " $RCEXCLUDELIBS " | grep -q " $RCREMOTELIB "
+		then
+			cat $RCROOT/libsremote/$RCREMOTELIB
+		fi
+	done
 	# If there's a site.defs file, add it in
 	[ -n "$RCROOT/sites/$RCSITE/site.defs" ] && cat "$RCROOT/sites/$RCSITE/site.defs" || :
 	# If there's an $RCSCRIPTDEFS file, add it in

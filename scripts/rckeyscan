@@ -56,4 +56,6 @@ resolvehostlist $*
 for REMOTEHOST in $RCREMOTEHOSTS
 do
 	echo "Scanning $REMOTEHOST"
+	HOSTKEY=$(ssh-keyscan $REMOTEHOST 2>/dev/null)
+	grep -q "$HOSTKEY" ~/.ssh/known_hosts || echo "$HOSTKEY" >> ~/.ssh/known_hosts
 done

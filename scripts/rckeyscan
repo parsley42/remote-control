@@ -1,0 +1,59 @@
+#!/bin/bash -e
+# rckeyscan - get host keys for a bunch of hosts
+
+RCDIR=$(dirname `readlink -f $0`)
+RCROOT=$(dirname $RCDIR)
+
+[ -e ~/.rcconfig ] && source ~/.rcconfig
+
+shopt -s expand_aliases # for functrap
+# Functions for dealing with errors
+. $RCROOT/libslocal/errhandle.sh
+# Functions for resolving supplied hosts
+. $RCROOT/libslocal/hostlib.sh
+
+# Try to figure out the site to use
+if [ -z "$RCSITE" ] # environment variable overrides ~/.rcsite
+then
+	if [ -e ~/.rcsite ]
+	then
+		# ~/.rcsite should contain no more/less than RCSITE=xxx
+		. ~/.rcsite
+	else
+		# If there's only one site, default to that
+		RCSITECOUNT=$(ls $RCROOT/sites | wc -l)
+		if [ $RCSITECOUNT -gt 2 ]
+		then
+			errorout "Multiple sites found and RCSITE not set, aborting."
+		elif [ $RCSITECOUNT -eq 1 ]
+		then
+			RCSITE=$(ls $RCROOT/sites)
+		else
+			errorout "At least one site required in $RCROOT/sites"
+		fi
+	fi
+fi
+if [ ! -d "$RCROOT/sites/$RCSITE" ]
+then
+	errorout "RCSITE ($RCSITE) refers to non-existent directory ($RCROOT/sites/$RCSITE)"
+fi
+
+# Options string for rckeyscan
+RCOPTS=":d:DhH:o:s:St"
+usage(){
+	cat >&2 <<EOF
+Usage:
+rckeyscan <hostspec> ...
+	Scan hostkeys for a bunch of hosts
+EOF
+	exit 1
+}
+
+[ $# -eq 0 ] && usage
+
+resolvehostlist $*
+
+for REMOTEHOST in $RCREMOTEHOSTS
+do
+	echo "Scanning $REMOTEHOST"
+done

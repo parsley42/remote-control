@@ -179,7 +179,8 @@ case $RCARG1 in
 		[ -z "$RCARG2" ] && errorout "missing command"
 		RCCOMMAND="$RCARG2"
 		[ -z "$RCARG3" ] && errorout "missing hostspec"
-		RCREMOTEHOSTS=$(resolvehostlist $RCARG3) || exit 1
+		resolvehostlist $RCARG3
+		[ -n "$RCREMOTEHOSTS" ] || errorout "Unable to resolve any hosts from \"$RCARG3\""
 		RCSHIFT=3
 		;;
 	job)
@@ -227,10 +228,12 @@ case $RCARG1 in
 				;;
 			hostgroup)
 				[ -z "$RCARG3" ] && errorout "Missing group name to list hostgroup command"
-				RCREMOTEHOSTS=$(resolvehostgroup $RCARG3) || exit 1
+				resolvehostgroup $RCARG3
+				[ -n "$RCREMOTEHOSTS" ] || errorout "Unable to resolve any hosts from group \"$RCARG3\""
 				for RCHOST in $RCREMOTEHOSTS
 				do
-					echo "$(hostnicename $RCHOST) -> $RCHOST"
+					hostnicename $RCHOST
+					echo "$RCNICENAME -> $RCHOST"
 				done
 				exit 0
 				;;
@@ -251,13 +254,17 @@ case $RCARG1 in
 		# Resolve remote hosts
 		if [ -n "$RCREMOTEHOSTS" ]
 		then
-			RCREMOTEHOSTS=$(resolvehostlist $RCREMOTEHOSTS)
+			RCRESOLVEHOSTS="$RCREMOTEHOSTS"
+			unset RCREMOTEHOSTS
+			resolvehostlist $RCRESOLVEHOSTS
+			[ -n "$RCREMOTEHOSTS" ] || errorout "Couldn't resolve any hosts from configured hostlist \"$RCRESOLVEHOSTS\""
 			RCSHIFT=1 # no hosts required
 		else # If there was no default, last argument needs to be the host spec
 			# Create an array from the positional parameters
 			RCARGARR=("$@")
 			# Resolve hosts from the last element
-			RCREMOTEHOSTS=$(resolvehostlist ${RCARGARR[-1]})
+			resolvehostlist ${RCARGARR[-1]}
+			[ -n "$RCREMOTEHOSTS" ] || errorout "Couldn't resolve any hosts from \"${RCARGARR[-1]}\""
 			# Remove the last element
 			((RCLASTARG=${#RCARGARR[@]} - 1))
 			unset -v RCARGARR[$RCLASTARG]
@@ -279,7 +286,8 @@ do
 			RCSCRIPTDEFS=${OPTARG}
 			;;
 		H)
-			RCREMOTEHOSTS=$(resolvehostlist ${OPTARG})
+			resolvehostlist ${OPTARG}
+			[ -n "$RCREMOTEHOSTS" ] || errorout "Couldn't resolve any hosts from \"${OPTARG}\""
 			;;
 		-)
 			break
@@ -403,7 +411,9 @@ piper(){
 	# Set the task ID
 	echo "RCTASKID=$RCTASKID"
 	cat $RCROOT/libsremote/errtrap.sh
-	# If there's a .defs file, add it in
+	# If there's a site.defs file, add it in
+	[ -n "$RCROOT/sites/$RCSITE/site.defs" ] && cat "$RCROOT/sites/$RCSITE/site.defs" || :
+	# If there's an $RCSCRIPTDEFS file, add it in
 	[ -n "$RCSCRIPTDEFSPATH" ] && cat $RCSCRIPTDEFSPATH || :
 	# Set the positional values, options and arguments
 	[ -n "$SETSTRING" ] && echo "$SETSTRING" || :
@@ -459,15 +469,15 @@ hosterrorcheck(){
 [ -z "$RCTASKNAME" ] && RCTASKNAME="$RCCOMMAND" || :
 for RCREMOTE in $RCREMOTEHOSTS
 do
-	RCNICEHOST=$(hostnicename $RCREMOTE)
+	hostnicename $RCREMOTE
 	if [ -n "$RCDRYRUN"  ]
 	then
 		echo "*** DRY RUN ***" >&2
-		echo "*** Sending \"$RCTASKNAME\" to $RCNICEHOST" >&2
+		echo "*** Sending \"$RCTASKNAME\" to $RCNICENAME" >&2
 		[ -n "$RCCOMMAND" ] && echo "$RCCOMMAND $*"
-		[ -n "$RCSCRIPT" ] && piper $RCNICEHOST $*
+		[ -n "$RCSCRIPT" ] && piper $RCNICENAME $*
 	else
-		echo "*** Sending \"$RCTASKNAME\" to $RCNICEHOST" >&2
+		echo "*** Sending \"$RCTASKNAME\" to $RCNICENAME" >&2
 		# Don't error out or trap if ssh returns an error
 		set +e
 		trap - ERR
@@ -476,7 +486,7 @@ do
 		then
 			if [ -n "$RCSCRIPT" ]
 			then
-				piper $RCNICEHOST $* | (
+				piper $RCNICENAME $* | (
 					ssh $RCSSHOPTS -T $RCREMOTE > $RCOUTPUTDIR/$RCREMOTE.out 2> $RCOUTPUTDIR/$RCREMOTE.err
 					hosterrorcheck
 				) &
@@ -491,10 +501,10 @@ do
 		else
 			if [ -z "$RCOUTPUTDIR" ]
 			then
-				[ -n "$RCSCRIPT" ] && { piper $RCNICEHOST $* | ssh $RCSSHOPTS -T $RCREMOTE; hosterrorcheck; }
+				[ -n "$RCSCRIPT" ] && { piper $RCNICENAME $* | ssh $RCSSHOPTS -T $RCREMOTE; hosterrorcheck; }
 				[ -n "$RCCOMMAND" ] && { ssh $RCSSHOPTS -T $RCREMOTE "$RCCOMMAND $*"; hosterrorcheck; }
 			else
-				[ -n "$RCSCRIPT" ] && { piper $RCNICEHOST $* | ssh $RCSSHOPTS -T $RCREMOTE > $RCOUTPUTDIR/$RCREMOTE.out 2> $RCOUTPUTDIR/$RCREMOTE.err; hosterrorcheck; }
+				[ -n "$RCSCRIPT" ] && { piper $RCNICENAME $* | ssh $RCSSHOPTS -T $RCREMOTE > $RCOUTPUTDIR/$RCREMOTE.out 2> $RCOUTPUTDIR/$RCREMOTE.err; hosterrorcheck; }
 				[ -n "$RCCOMMAND" ] && { ssh $RCSSHOPTS -T $RCREMOTE "$RCCOMMAND $*" > $RCOUTPUTDIR/$RCREMOTE.out 2> $RCOUTPUTDIR/$RCREMOTE.err; hosterrorcheck; }
 			fi
 		fi

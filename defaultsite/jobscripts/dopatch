@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -e
 # dopatch - scheduled by 'patch' job to do the actual work of patching.
 # Usage: dopatch (-a <adminmail>) "<contact>" <host>
 
@@ -61,7 +61,7 @@ then
 	mail -r $RCADMINMAIL -s "$POSTPATCHSUBJECT" $CONTACT <<<"$POSTPATCHMESSAGE"
 	echo "Done"
 	MAILSUBJECT="Patching succeeded for $PATCHHOST"
-	[ grep -qi 'warn\|err' ] $LOG && MAILSUBJECT="Warning(s)/Error(s) while patching $PATCHHOST"
+	grep -qi 'warning\|error' $LOG && MAILSUBJECT="Warning(s)/Error(s) while patching $PATCHHOST"
 	mail -r $RCADMINMAIL -s "$MAILSUBJECT" $RCADMINMAIL < $LOG
 else
 	status "Patch/reboot failed, sending notify to sysadmin"

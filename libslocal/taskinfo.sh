@@ -16,17 +16,17 @@ listsitetasks(){
 	then
 		grep -v '^$' $RCROOT/$SITE/tasks.conf | grep -v '^#' | grep RCCOMMAND
 	fi
-	if [ -d "$RCROOT/$SITE/taskscripts" ]
+	if [ -d "$RCROOT/$SITE/tasks" ]
 	then
-		for RCSITESCRIPT in $(cd "$RCROOT/$SITE/taskscripts"; echo *)
+		for RCSITESCRIPT in $(cd "$RCROOT/$SITE/tasks"; echo *)
 		do
-			[ ! -e "$RCROOT/$SITE/taskscripts/$RCSITESCRIPT" ] && break # when * expands to *
+			[ ! -e "$RCROOT/$SITE/tasks/$RCSITESCRIPT" ] && break # when * expands to *
 			RCSCRIPT=$(basename $RCSITESCRIPT .sh)
 			if [ -e "$RCROOT/$SITE/tasks.conf" ]
 			then
 				RCTASKLINE=$(grep -h "^$RCSCRIPT:" "$RCROOT/$SITE/tasks.conf" || :)
 			fi
-			SCRIPTCONF=$(grep -h "^#RCCONFIG:" "$RCROOT/$SITE/taskscripts/$RCSITESCRIPT" || :)
+			SCRIPTCONF=$(grep -h "^#RCCONFIG:" "$RCROOT/$SITE/tasks/$RCSITESCRIPT" || :)
 			echo -n "$RCSCRIPT"
 			if [ -n "$SCRIPTCONF" ]
 			then
@@ -71,7 +71,7 @@ gettaskconf(){
 		done
 	fi
 	# Now look for the script itself, first check RCSCRIPT, then look in
-	# RCSITE/taskscripts/, then default/taskscripts/
+	# RCSITE/tasks/, then default/tasks/
 	if [ -n "$RCSCRIPT" ]
 	then
 		if [[ $RCSCRIPT = */* ]] # was the full path specified?
@@ -84,24 +84,24 @@ gettaskconf(){
 		RCSCRIPT=$RCTASKNAME
 	fi
 	# Now search site directories for RCSCRIPTPATH
-	if [ -e "$RCROOT/sites/$RCSITE/taskscripts/${RCTASKNAME}" ]
+	if [ -e "$RCROOT/sites/$RCSITE/tasks/${RCTASKNAME}" ]
 	then
-		RCSCRIPTPATH="$RCROOT/sites/$RCSITE/taskscripts/${RCTASKNAME}"
-	elif [ -e "$RCROOT/sites/$RCSITE/taskscripts/${RCTASKNAME}.sh" ]
+		RCSCRIPTPATH="$RCROOT/sites/$RCSITE/tasks/${RCTASKNAME}"
+	elif [ -e "$RCROOT/sites/$RCSITE/tasks/${RCTASKNAME}.sh" ]
 	then
-		RCSCRIPTPATH="$RCROOT/sites/$RCSITE/taskscripts/${RCTASKNAME}.sh"
-	elif [ -e "$RCROOT/sites/common/taskscripts/${RCTASKNAME}" ]
+		RCSCRIPTPATH="$RCROOT/sites/$RCSITE/tasks/${RCTASKNAME}.sh"
+	elif [ -e "$RCROOT/sites/common/tasks/${RCTASKNAME}" ]
 	then
-		RCSCRIPTPATH="$RCROOT/sites/common/taskscripts/${RCTASKNAME}"
-	elif [ -e "$RCROOT/sites/common/taskscripts/${RCTASKNAME}.sh" ]
+		RCSCRIPTPATH="$RCROOT/sites/common/tasks/${RCTASKNAME}"
+	elif [ -e "$RCROOT/sites/common/tasks/${RCTASKNAME}.sh" ]
 	then
-		RCSCRIPTPATH="$RCROOT/sites/common/taskscripts/${RCTASKNAME}.sh"
-	elif [ -e "$RCROOT/defaultsite/taskscripts/${RCTASKNAME}" ]
+		RCSCRIPTPATH="$RCROOT/sites/common/tasks/${RCTASKNAME}.sh"
+	elif [ -e "$RCROOT/defaultsite/tasks/${RCTASKNAME}" ]
 	then
-		RCSCRIPTPATH="$RCROOT/defaultsite/taskscripts/${RCTASKNAME}"
-	elif [ -e "$RCROOT/defaultsite/taskscripts/${RCTASKNAME}.sh" ]
+		RCSCRIPTPATH="$RCROOT/defaultsite/tasks/${RCTASKNAME}"
+	elif [ -e "$RCROOT/defaultsite/tasks/${RCTASKNAME}.sh" ]
 	then
-		RCSCRIPTPATH="$RCROOT/defaultsite/taskscripts/${RCTASKNAME}.sh"
+		RCSCRIPTPATH="$RCROOT/defaultsite/tasks/${RCTASKNAME}.sh"
 	else
 		errorout "Unable to locate task \"$RCTASKNAME\", maybe it's a job?"
 	fi

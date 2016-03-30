@@ -46,7 +46,7 @@ fi
 # Every script should give a usage statement
 # when called with '-h'
 RCSCRIPTOPTS=":h"
-# By default, taskscripts require at least zero arguments
+# By default, task scripts require at least zero arguments
 RCREQUIREDARGS=0
 
 # Options string for rc
@@ -67,16 +67,20 @@ rc list hostgroup <group>
 	List all hosts in group <group>
 rc list jobs (site)
 	List all jobs for the current or specified site
+
 rc (options) cmd "<command>" (hostspec)
 	Run a single command
-rc (options) job <jobname> <joboptions> <jobargs>
-	Wrapper for exec'ing jobscripts/<job>
-rc (options) <task> (taskoptions) (taskarguments) (hostspec)
+
+rc (options) run <job> (joboptions) (jobargs)
+	Wrapper for exec'ing jobs/<job>
+
+rc (options) do <task> (taskoptions) (taskarguments) (hostspec)
 	<task> is the name of the task to be run, e.g. 'whois'
 
 	(hostspec) is required for commands or if there is no default hostspec
 		for the task. It can be a single host (or alias), hostgroup, or
-		a space-separated combination of hosts, aliases and hostgroups.
+		a space-separated combination of hosts, aliases and hostgroups
+		enclosed in quotes.
 
 	(options) are options to rc which may override defaults from
 	tasks.conf files
@@ -185,7 +189,7 @@ case $RCARG1 in
 		[ -n "$RCREMOTEHOSTS" ] || errorout "Unable to resolve any hosts from \"$RCARG3\""
 		RCSHIFT=3
 		;;
-	job)
+	run)
 		RCJOB=$RCARG2
 		# shift away rc options and arguments, the rest go to the job
 		shift $((OPTIND + 1))
@@ -193,7 +197,7 @@ case $RCARG1 in
 		export RCSITE # make sure jobs run in the correct site
 		for RCJOBDIR in sites/$RCSITE sites/common defaultsite
 		do
-			RCJOBSCRIPT="$RCROOT/$RCJOBDIR/jobscripts/$RCJOB"
+			RCJOBSCRIPT="$RCROOT/$RCJOBDIR/jobs/$RCJOB"
 			[ -e "$RCJOBSCRIPT" ] && exec $RCJOBSCRIPT "$@" || :
 		done
 		errorout "Job \"$RCJOB\" not found, maybe it's just a task?"
@@ -205,7 +209,7 @@ case $RCARG1 in
 				RCSITE=${RCARG3:-$RCSITE}
 				for SITE in "sites/$RCSITE" sites/common defaultsite
 				do
-					RCJOBLIST=$(ls -A $RCROOT/$SITE/jobscripts/ 2>/dev/null || :)
+					RCJOBLIST=$(ls -A $RCROOT/$SITE/jobs/ 2>/dev/null || :)
 					[ -n "$RCJOBLIST" ] && echo -e "### Jobs for $SITE:\n$RCJOBLIST"
 				done
 				exit 0
@@ -244,10 +248,10 @@ case $RCARG1 in
 				;;
 		esac
 		;;
-	*)
-		RCTASKNAME=$RCARG1
+	do)
+		RCTASKNAME=$RCARG2
 		# Special case: handle rc <task> -h
-		[ "$RCARG2" = "-h" ] && taskhelp $RCTASKNAME
+		[ "$RCARG3" = "-h" ] && taskhelp $RCTASKNAME
 		# Get task defaults
 		if [ -n "$RCTASKNAME" ]
 		then
@@ -260,7 +264,6 @@ case $RCARG1 in
 			unset RCREMOTEHOSTS
 			resolvehostlist $RCRESOLVEHOSTS
 			[ -n "$RCREMOTEHOSTS" ] || errorout "Couldn't resolve any hosts from configured hostlist \"$RCRESOLVEHOSTS\""
-			RCSHIFT=1 # no hosts required
 		else # If there was no default, last argument needs to be the host spec
 			# Create an array from the positional parameters
 			RCARGARR=("$@")
@@ -272,8 +275,8 @@ case $RCARG1 in
 			unset -v RCARGARR[$RCLASTARG]
 			# Re-set the positional parameters
 			set -- "${RCARGARR[@]}"
-			RCSHIFT=1 # hosts specified on cmdline
 		fi
+		RCSHIFT=2
 		;;
 esac
 

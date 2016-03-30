@@ -23,7 +23,7 @@ rc list jobs (site)
 rc (options) cmd "<command>" (hostspec)
 	Run a single command
 rc (options) job <jobname> <joboptions> <jobargs>
-	Wrapper for exec'ing jobscripts/<job>
+	Wrapper for exec'ing jobs/<job>
 rc (options) <task> (taskoptions) (taskarguments) (hostspec)
 	<task> is the name of the task to be run, e.g. 'whois'
 

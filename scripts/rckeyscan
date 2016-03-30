@@ -53,7 +53,7 @@ EOF
 
 resolvehostlist $*
 
-for REMOTEHOST in $RCREMOTEHOSTS
+for REMOTEHOST in $RCEXECHOSTS
 do
 	echo "Scanning $REMOTEHOST"
 	HOSTKEY=$(ssh-keyscan $REMOTEHOST 2>/dev/null)

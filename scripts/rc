@@ -198,7 +198,7 @@ case $RCSUBCMD in
 		RCCOMMAND="$RCARG1"
 		[ -z "$RCARG2" ] && errorout "missing hostspec"
 		resolvehostlist $RCARG2
-		[ -n "$RCREMOTEHOSTS" ] || errorout "Unable to resolve any hosts from \"$RCARG2\""
+		[ -n "$RCEXECHOSTS" ] || errorout "Unable to resolve any hosts from \"$RCARG2\""
 		RCSHIFT=2
 		;;
 	run)
@@ -247,8 +247,8 @@ case $RCSUBCMD in
 			hostgroup)
 				[ -z "$RCARG2" ] && errorout "Missing group name to list hostgroup command"
 				resolvehostgroup $RCARG2
-				[ -n "$RCREMOTEHOSTS" ] || errorout "Unable to resolve any hosts from group \"$RCARG2\""
-				for RCHOST in $RCREMOTEHOSTS
+				[ -n "$RCEXECHOSTS" ] || errorout "Unable to resolve any hosts from group \"$RCARG2\""
+				for RCHOST in $RCEXECHOSTS
 				do
 					hostnicename $RCHOST
 					echo "$RCNICENAME -> $RCHOST"
@@ -270,18 +270,18 @@ case $RCSUBCMD in
 			gettaskconf $RCTASKNAME
 		fi
 		# Resolve remote hosts
-		if [ -n "$RCREMOTEHOSTS" ]
+		if [ -n "$RCEXECHOSTS" ]
 		then
-			RCRESOLVEHOSTS="$RCREMOTEHOSTS"
-			unset RCREMOTEHOSTS
+			RCRESOLVEHOSTS="$RCEXECHOSTS"
+			unset RCEXECHOSTS
 			resolvehostlist $RCRESOLVEHOSTS
-			[ -n "$RCREMOTEHOSTS" ] || errorout "Couldn't resolve any hosts from configured hostlist \"$RCRESOLVEHOSTS\""
+			[ -n "$RCEXECHOSTS" ] || errorout "Couldn't resolve any hosts from configured hostlist \"$RCRESOLVEHOSTS\""
 		else # If there was no default, last argument needs to be the host spec
 			# Create an array from the positional parameters
 			RCARGARR=("$@")
 			# Resolve hosts from the last element
 			resolvehostlist ${RCARGARR[-1]}
-			[ -n "$RCREMOTEHOSTS" ] || errorout "Couldn't resolve any hosts from \"${RCARGARR[-1]}\""
+			[ -n "$RCEXECHOSTS" ] || errorout "Couldn't resolve any hosts from \"${RCARGARR[-1]}\""
 			# Remove the last element
 			((RCLASTARG=${#RCARGARR[@]} - 1))
 			unset -v RCARGARR[$RCLASTARG]
@@ -312,7 +312,7 @@ do
 			;;
 		H)
 			resolvehostlist ${OPTARG}
-			[ -n "$RCREMOTEHOSTS" ] || errorout "Couldn't resolve any hosts from \"${OPTARG}\""
+			[ -n "$RCEXECHOSTS" ] || errorout "Couldn't resolve any hosts from \"${OPTARG}\""
 			;;
 		-)
 			break
@@ -343,7 +343,7 @@ else # RCCOMMAND, not RCSCRIPT
 	fi
 fi
 
-[ -z "$RCREMOTEHOSTS" ] && errorout "No remote host set!"
+[ -z "$RCEXECHOSTS" ] && errorout "No remote host set!"
 
 # Create the SETSTRING for passing arguments to the remote host
 if [ $# -gt 0 -a -z "$RCCOMMAND" ]
@@ -448,7 +448,7 @@ piper(){
 }
 
 # Should output go to files?
-RCHOSTARRAY=($RCREMOTEHOSTS)
+RCHOSTARRAY=($RCEXECHOSTS)
 RCNUMHOSTS=${#RCHOSTARRAY[@]}
 if [ -n "$RCOUTPUTDIR" -o \( $RCNUMHOSTS -gt 1 -a -z "$RCSERIAL" \) ]
 then
@@ -488,7 +488,7 @@ hosterrorcheck(){
 }
 
 [ -z "$RCTASKNAME" ] && RCTASKNAME="$RCCOMMAND" || :
-for RCREMOTE in $RCREMOTEHOSTS
+for RCREMOTE in $RCEXECHOSTS
 do
 	hostnicename $RCREMOTE
 	if [ -n "$RCDRYRUN"  ]

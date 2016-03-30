@@ -62,9 +62,9 @@ addhosts(){
 
 	for ADDHOST in $*
 	do
-		echo " $RCREMOTEHOSTS " | grep -q " $ADDHOST " || RCREMOTEHOSTS="$RCREMOTEHOSTS $ADDHOST"
+		echo " $RCEXECHOSTS " | grep -q " $ADDHOST " || RCEXECHOSTS="$RCEXECHOSTS $ADDHOST"
 	done
-	RCREMOTEHOSTS=${RCREMOTEHOSTS# }
+	RCEXECHOSTS=${RCEXECHOSTS# }
 }
 
 resolvehostlist(){
@@ -81,6 +81,6 @@ resolvehostlist(){
 				;;
 		esac
 	done
-	HOSTARRAY=($RCREMOTEHOSTS)
+	HOSTARRAY=($RCEXECHOSTS)
 	[ ${#HOSTARRAY[@]} -eq 0 ] && { errormsg "Couldn't resolve any hosts in: $*"; return 0; } || :
 }

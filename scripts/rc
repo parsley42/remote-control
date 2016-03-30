@@ -15,6 +15,8 @@ shopt -s expand_aliases # for functrap
 . $RCROOT/libslocal/hostlib.sh
 # For looking up a task
 . $RCROOT/libslocal/taskinfo.sh
+# Other rc functions that may be useful for jobs
+. $RCROOT/libslocal/common.sh
 
 # Try to figure out the site to use
 if [ -z "$RCSITE" ] # environment variable overrides ~/.rcsite
@@ -278,6 +280,10 @@ case $RCARG1 in
 		fi
 		RCSHIFT=2
 		;;
+	*)
+		errormsg "Unknown command: $RCARG1"
+		usage
+		;;
 esac
 
 # Rewind for full option processing
@@ -288,7 +294,8 @@ while getopts "$RCOPTS" OPT
 do
 	case $OPT in
 		d)
-			RCSCRIPTDEFS=${OPTARG}
+			RCDEFSFILE=${OPTARG}
+			[ ! -e "$RCDEFSFILE" ] && errorout "Unable to locate definitions file $RCDEFSFILE"
 			;;
 		E)
 			RCEXCLUDELIBS="$RCEXCLUDELIBS ${OPTARG}"
@@ -327,22 +334,6 @@ else # RCCOMMAND, not RCSCRIPT
 fi
 
 [ -z "$RCREMOTEHOSTS" ] && errorout "No remote host set!"
-
-# If a defs file is required, search for it
-if [ -n "$RCSCRIPTDEFS" ]
-then
-	if [[ "$RCSCRIPTDEFS" = */* ]]
-	then
-		[ ! -e "$RCSCRIPTDEFS" ] && errorout "$RCSCRIPT requires definitions file $RCSCRIPTDEFS"
-		RCSCRIPTDEFSPATH="$RCSCRIPTDEFS"
-	else
-		for RCSEARCHPATH in sites/$RCSITE sites/common defaultsite failed
-		do
-			[ "$RCSEARCHPATH" = "failed" ] && { errorout "Couldn't locate defs file $RCSCRIPTDEFS"; }
-			[ -e "$RCROOT/$RCSEARCHPATH/$RCSCRIPTDEFS" ] && { RCSCRIPTDEFSPATH="$RCROOT/$RCSEARCHPATH/$RCSCRIPTDEFS"; break; }
-		done
-	fi
-fi
 
 # Create the SETSTRING for passing arguments to the remote host
 if [ $# -gt 0 -a -z "$RCCOMMAND" ]
@@ -383,7 +374,8 @@ fi
 # in immediate mode
 piper(){
 	local RCHOST=$1
-	shift
+	local RCTASK=$2
+	shift 2
 	# If we're sudo'ing, take care of that first
 	if [ -n "$RCELEVATE" ]
 	then
@@ -419,17 +411,15 @@ piper(){
 	# Set the task ID
 	echo "RCTASKID=$RCTASKID"
 	# Send libraries for remote use
-	for RCREMOTELIB in errtrap.sh
+	for RCREMOTELIB in errtrap.sh status.sh
 	do
 		if ! echo " $RCEXCLUDELIBS " | grep -q " $RCREMOTELIB "
 		then
 			cat $RCROOT/libsremote/$RCREMOTELIB
 		fi
 	done
-	# If there's a site.defs file, add it in
-	[ -n "$RCROOT/sites/$RCSITE/site.defs" ] && cat "$RCROOT/sites/$RCSITE/site.defs" || :
-	# If there's an $RCSCRIPTDEFS file, add it in
-	[ -n "$RCSCRIPTDEFSPATH" ] && cat $RCSCRIPTDEFSPATH || :
+	# Send variable definitions
+	catdefs $RCHOST $RCTASK
 	# Set the positional values, options and arguments
 	[ -n "$SETSTRING" ] && echo "$SETSTRING" || :
 	echo "echo $RCTASKID task starting on $RCHOST: $(basename $RCSCRIPT) >&2"
@@ -490,7 +480,7 @@ do
 		echo "*** DRY RUN ***" >&2
 		echo "*** Sending \"$RCTASKNAME\" to $RCNICENAME" >&2
 		[ -n "$RCCOMMAND" ] && echo "$RCCOMMAND $*"
-		[ -n "$RCSCRIPT" ] && piper $RCNICENAME $*
+		[ -n "$RCSCRIPT" ] && piper $RCNICENAME $RCTASKNAME $*
 	else
 		echo "*** Sending \"$RCTASKNAME\" to $RCNICENAME" >&2
 		# Don't error out or trap if ssh returns an error
@@ -501,7 +491,7 @@ do
 		then
 			if [ -n "$RCSCRIPT" ]
 			then
-				piper $RCNICENAME $* | (
+				piper $RCNICENAME $RCTASKNAME $* | (
 					ssh $RCSSHOPTS -T $RCREMOTE > $RCOUTPUTDIR/$RCREMOTE.out 2> $RCOUTPUTDIR/$RCREMOTE.err
 					hosterrorcheck
 				) &
@@ -516,10 +506,10 @@ do
 		else
 			if [ -z "$RCOUTPUTDIR" ]
 			then
-				[ -n "$RCSCRIPT" ] && { piper $RCNICENAME $* | ssh $RCSSHOPTS -T $RCREMOTE; hosterrorcheck; }
+				[ -n "$RCSCRIPT" ] && { piper $RCNICENAME $RCTASKNAME $* | ssh $RCSSHOPTS -T $RCREMOTE; hosterrorcheck; }
 				[ -n "$RCCOMMAND" ] && { ssh $RCSSHOPTS -T $RCREMOTE "$RCCOMMAND $*"; hosterrorcheck; }
 			else
-				[ -n "$RCSCRIPT" ] && { piper $RCNICENAME $* | ssh $RCSSHOPTS -T $RCREMOTE > $RCOUTPUTDIR/$RCREMOTE.out 2> $RCOUTPUTDIR/$RCREMOTE.err; hosterrorcheck; }
+				[ -n "$RCSCRIPT" ] && { piper $RCNICENAME $RCTASKNAME $* | ssh $RCSSHOPTS -T $RCREMOTE > $RCOUTPUTDIR/$RCREMOTE.out 2> $RCOUTPUTDIR/$RCREMOTE.err; hosterrorcheck; }
 				[ -n "$RCCOMMAND" ] && { ssh $RCSSHOPTS -T $RCREMOTE "$RCCOMMAND $*" > $RCOUTPUTDIR/$RCREMOTE.out 2> $RCOUTPUTDIR/$RCREMOTE.err; hosterrorcheck; }
 			fi
 		fi

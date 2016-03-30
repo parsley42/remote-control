@@ -14,9 +14,17 @@ EOF
 
 [ "$1" = "-h"  ] && usage
 
-[ -z "$1" ] && echo "*** $(date) - Checking whether updates are needed."
+echo -n "*** $(date) - Checking whether updates are needed... "
 
-yum check-update
+yum check-update > /dev/null
 RETVAL=$?
-[ -n "$1" -a $RETVAL -eq 100 ] && echo "needs updates"
+if [ $RETVAL -eq 100 ]
+then
+	echo "system needs updates"
+elif [ $RETVAL -eq 0 ]
+then
+	echo "system is up-to-date"
+else
+	echo "error checking for updates"
+fi
 exit $RETVAL

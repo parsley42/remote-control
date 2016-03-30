@@ -3,7 +3,7 @@
 
 # Package lists should be in packages.defs, probably in sites/common,
 # or possibly sites/<somesite>.
-#RCCONFIG:RCELEVATE=true;RCREQUIREDARGS=1;RCSCRIPTDEFS=packagelists.defs
+#RCCONFIG:RCELEVATE=true;RCREQUIREDARGS=1
 
 usage(){
 	cat <<EOF
@@ -22,9 +22,18 @@ exit 1
 [ "$1" = "-h" -o $# -eq 0 ] && usage
 
 addpkg(){
-	echo "$PACKAGES" | grep -q "\<$1\>" || PACKAGES="$PACKAGES $1"
+	if ! echo "$PACKAGES" | grep -q "\<$1\>"
+	then
+		if rpm -q $1 >/dev/null
+		then
+			echo "$1 already installed"
+		else
+			PACKAGES="$PACKAGES $1"
+		fi
+	fi
 }
 
+status "Compiling package list..."
 for PKGSPEC in $*
 do
 	if [[ $PKGSPEC = @* ]]
@@ -40,7 +49,10 @@ do
 	fi
 done
 
-echo "### $(date) - Installing packages"
+set -- $PACKAGES
+[ $# -eq 0 ] && { echo "... no packages to install"; exit 0; }
+
+status "Installing packages"
 for TRY in 1 2 3
 do
 	echo "=== Try $TRY:"

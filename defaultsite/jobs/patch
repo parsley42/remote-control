@@ -22,10 +22,10 @@ rcrequired(){
 	cat <<"EOF"
 ~/.rcconfig required with:
 RCADMINMAIL - optional, can be supplied with -a option
-RCPREPATCHSUBJECT - optional, if pre-patch notification sent
-RCPREPATCHMESSAGE - optional, if pre-patch notification sent
-RCPOSTPATCHSUBJECT
-RCPOSTPATCHMESSAGE
+PREPATCHSUBJECT - optional, if pre-patch notification sent
+PREPATCHMESSAGE - optional, if pre-patch notification sent
+POSTPATCHSUBJECT
+POSTPATCHMESSAGE
 
 See example-conf/HOME.rcconfig
 EOF
@@ -73,10 +73,10 @@ shift $((OPTIND-1))
 
 [ $# -ne 3 ] && usage
 [ -z "$RCADMINMAIL" ] && { echo "RCADMINMAIL undefined!"; rcrequired; }
-[ -z "$RCPREPATCHSUBJECT" ] && { echo "RCPREPATCHSUBJECT undefined!"; rcrequired; }
-[ -z "$RCPREPATCHMESSAGE" ] && { echo "RCPREPATCHMESSAGE undefined!"; rcrequired; }
-[ -z "$RCPOSTPATCHSUBJECT" ] && { echo "RCPOSTPATCHSUBJECT undefined!"; rcrequired; }
-[ -z "$RCPOSTPATCHMESSAGE" ] && { echo "RCPOSTPATCHMESSAGE undefined!"; rcrequired; }
+[ -z "$PREPATCHSUBJECT" ] && { echo "PREPATCHSUBJECT undefined!"; rcrequired; }
+[ -z "$PREPATCHMESSAGE" ] && { echo "PREPATCHMESSAGE undefined!"; rcrequired; }
+[ -z "$POSTPATCHSUBJECT" ] && { echo "POSTPATCHSUBJECT undefined!"; rcrequired; }
+[ -z "$POSTPATCHMESSAGE" ] && { echo "POSTPATCHMESSAGE undefined!"; rcrequired; }
 
 TIMESPEC="$1"
 CONTACT="$2"
@@ -114,8 +114,8 @@ fi
 if [ -n "$PRENOTIFY" ]
 then
 	status "Pre-notification requesting, setting up automated email for \"$PRENOTIFY\""
-	eval PREPATCHSUBJECT=\""$RCPREPATCHSUBJECT"\"
-	eval PREPATCHMESSAGE=\""$RCPREPATCHMESSAGE"\"
+	eval PREPATCHSUBJECT=\""$PREPATCHSUBJECT"\"
+	eval PREPATCHMESSAGE=\""$PREPATCHMESSAGE"\"
 	NOTIFYJOB=$(cat <<EOF
 mail -r $RCADMINMAIL -s "$PREPATCHSUBJECT" $CONTACT <<MEOF
 $PREPATCHMESSAGE

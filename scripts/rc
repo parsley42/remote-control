@@ -70,13 +70,13 @@ rc list hostgroup <group>
 rc list jobs (site)
 	List all jobs for the current or specified site
 
-rc (options) cmd "<command>" (hostspec)
+rc cmd (options) "<command>" (hostspec)
 	Run a single command
 
-rc (options) run <job> (joboptions) (jobargs)
+rc run (options) <job> (joboptions) (jobargs)
 	Wrapper for exec'ing jobs/<job>
 
-rc (options) do <task> (taskoptions) (taskarguments) (hostspec)
+rc do (options) <task> (taskoptions) (taskarguments) (hostspec)
 	<task> is the name of the task to be run, e.g. 'whois'
 
 	(hostspec) is required for commands or if there is no default hostspec
@@ -124,6 +124,14 @@ taskhelp(){
 		exit 0
 	fi
 }
+
+# rcdo -> rc do, etc.
+[ "$(basename $0)" = "rcdo" ] && set do "$@"
+[ "$(basename $0)" = "rcrun" ] && set run "$@"
+[ "$(basename $0)" = "rclist" ] && set list "$@"
+[ "$(basename $0)" = "rccmd" ] && set cmd "$@"
+RCSUBCMD=$1
+shift
 
 # Loop through once to find command/task, process non-override options
 while getopts "$RCOPTS" OPT
@@ -180,19 +188,18 @@ RCARGNUM2=$((OPTIND + 1))
 RCARGNUM3=$((OPTIND + 2))
 RCARG1=${!RCARGNUM1}
 RCARG2=${!RCARGNUM2}
-RCARG3=${!RCARGNUM3}
 
-case $RCARG1 in
+case $RCSUBCMD in
 	cmd)
-		[ -z "$RCARG2" ] && errorout "missing command"
-		RCCOMMAND="$RCARG2"
-		[ -z "$RCARG3" ] && errorout "missing hostspec"
-		resolvehostlist $RCARG3
-		[ -n "$RCREMOTEHOSTS" ] || errorout "Unable to resolve any hosts from \"$RCARG3\""
-		RCSHIFT=3
+		[ -z "$RCARG1" ] && errorout "missing command"
+		RCCOMMAND="$RCARG1"
+		[ -z "$RCARG2" ] && errorout "missing hostspec"
+		resolvehostlist $RCARG2
+		[ -n "$RCREMOTEHOSTS" ] || errorout "Unable to resolve any hosts from \"$RCARG2\""
+		RCSHIFT=2
 		;;
 	run)
-		RCJOB=$RCARG2
+		RCJOB=$RCARG1
 		# shift away rc options and arguments, the rest go to the job
 		shift $((OPTIND + 1))
 		export RCROOT # jobs may need to know this, for e.g. including libslocal/(lib).sh
@@ -205,10 +212,10 @@ case $RCARG1 in
 		errorout "Job \"$RCJOB\" not found, maybe it's just a task?"
 		;;
 	list)
-		[ -z "$RCARG2" ] && errorout "Missing argument to list command"
-		case "$RCARG2" in
+		[ -z "$RCARG1" ] && errorout "Missing argument to list command"
+		case "$RCARG1" in
 			jobs)
-				RCSITE=${RCARG3:-$RCSITE}
+				RCSITE=${RCARG2:-$RCSITE}
 				for SITE in "sites/$RCSITE" sites/common defaultsite
 				do
 					RCJOBLIST=$(ls -A $RCROOT/$SITE/jobs/ 2>/dev/null || :)
@@ -217,10 +224,10 @@ case $RCARG1 in
 				exit 0
 				;;
 			tasks)
-				[ -e ~/.tasks.conf -a \( -z "$RCARG3" -o "$RCARG3" = "user" \) ] && { echo "### User tasks:"; grep -v "^#" ~/.tasks.conf | grep -v '^$'; }
-				[ "$RCARG3" = "user" ] && exit 0
-				listsitetasks $RCARG3
-				[ -n "$RCARG3" ] && exit 0
+				[ -e ~/.tasks.conf -a \( -z "$RCARG2" -o "$RCARG2" = "user" \) ] && { echo "### User tasks:"; grep -v "^#" ~/.tasks.conf | grep -v '^$'; }
+				[ "$RCARG2" = "user" ] && exit 0
+				listsitetasks $RCARG2
+				[ -n "$RCARG2" ] && exit 0
 				listsitetasks common
 				listsitetasks defaultsite
 				exit 0
@@ -235,9 +242,9 @@ case $RCARG1 in
 				exit 0
 				;;
 			hostgroup)
-				[ -z "$RCARG3" ] && errorout "Missing group name to list hostgroup command"
-				resolvehostgroup $RCARG3
-				[ -n "$RCREMOTEHOSTS" ] || errorout "Unable to resolve any hosts from group \"$RCARG3\""
+				[ -z "$RCARG2" ] && errorout "Missing group name to list hostgroup command"
+				resolvehostgroup $RCARG2
+				[ -n "$RCREMOTEHOSTS" ] || errorout "Unable to resolve any hosts from group \"$RCARG2\""
 				for RCHOST in $RCREMOTEHOSTS
 				do
 					hostnicename $RCHOST
@@ -246,14 +253,14 @@ case $RCARG1 in
 				exit 0
 				;;
 			*)
-				errorout "Don't know how to list $RCARG2"
+				errorout "Don't know how to list $RCARG1"
 				;;
 		esac
 		;;
 	do)
-		RCTASKNAME=$RCARG2
+		RCTASKNAME=$RCARG1
 		# Special case: handle rc <task> -h
-		[ "$RCARG3" = "-h" ] && taskhelp $RCTASKNAME
+		[ "$RCARG2" = "-h" ] && taskhelp $RCTASKNAME
 		# Get task defaults
 		if [ -n "$RCTASKNAME" ]
 		then
@@ -278,10 +285,10 @@ case $RCARG1 in
 			# Re-set the positional parameters
 			set -- "${RCARGARR[@]}"
 		fi
-		RCSHIFT=2
+		RCSHIFT=1
 		;;
 	*)
-		errormsg "Unknown command: $RCARG1"
+		errormsg "Unknown command: $RCSUBCMD"
 		usage
 		;;
 esac

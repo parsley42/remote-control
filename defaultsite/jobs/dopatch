@@ -57,9 +57,9 @@ then
 	status "Sending notifications"
 	OSVER=$(rccmd "cat /etc/system-release" $PATCHHOST) || OSVER="error"
 	KERNELVER=$(rccmd "uname -srv" $PATCHHOST) || KERNELVER="error"
-	eval POSTPATCHSUBJECT=\""$RCPOSTPATCHSUBJECT"\"
+	eval POSTPATCHSUBJECT=\""$POSTPATCHSUBJECT"\"
 	# Several hoops to jump through to expand things the way we want...
-	eval POSTPATCHMESSAGE=\""$RCPOSTPATCHMESSAGE"\"
+	eval POSTPATCHMESSAGE=\""$POSTPATCHMESSAGE"\"
 	mail -r $RCADMINMAIL -s "$POSTPATCHSUBJECT" $CONTACT <<<"$POSTPATCHMESSAGE"
 	echo "Done"
 	MAILSUBJECT="Patching succeeded for $PATCHHOST"

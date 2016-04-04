@@ -1,19 +1,17 @@
 #!/bin/bash
 # patch - front-end job for patching remote servers
+#RCJOBREQUIREVARS="PATCHWHEN CONTACT PATCHHOST"
 # This job should do pre-flight check, then schedule the dopatch job
 
 source $RCROOT/libslocal/common.sh
 
 usage(){
 	cat <<EOF
-Usage: patch (-f) (-a <adminmail>) (-n "<timespec>") "<timespec>" "<contact>" <host>
+Usage: patch (FORCE=true) (PRENOTIFY=true) (NOTIFYWHEN=<timespec>) \
+	(PATCHWHEN=<timespec>) CONTACT=<email> PATCHHOST=<host>
 
-Patch a system at the given time, sending pre- and post- notifications to
-<contact>.
-	-f - force patching even when not needed
-	-n <timespec> - also notify the contact at the given time, normally
-		~12-24hrs before patching.
-	-a <adminmail> - override a configured admin email
+Patch a system at the given time, sending pre-(if configured) and post-
+notifications to CONTACT.
 EOF
 	exit 1
 }

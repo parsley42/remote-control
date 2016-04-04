@@ -1,4 +1,6 @@
 #!/bin/bash -e
+# The dopatch job uses the same defs file as the patch job
+#RCCONFIG:RCDEFSNAME=patch
 # dopatch - scheduled by 'patch' job to do the actual work of patching.
 # Usage: dopatch (-a <adminmail>) "<contact>" <host>
 

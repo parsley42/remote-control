@@ -431,7 +431,7 @@ piper(){
 		fi
 	done
 	# Send variable definitions
-	catdefs $RCHOST $RCTASK
+	taskdefs $RCHOST $RCTASK
 	# Set the positional values, options and arguments
 	[ -n "$SETSTRING" ] && echo "$SETSTRING" || :
 	echo "echo $RCTASKID task starting on $RCHOST: $(basename $RCSCRIPT) >&2"

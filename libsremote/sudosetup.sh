@@ -5,3 +5,4 @@ unset RCSUDOPASS
 # Test the password before going on
 sudo -A /bin/true || { echo "sudo failed. Wrong password?"; exit 1; }
 sudo -A su <<"RCSUDOSCRIPTEOF"
+unset SUDO_ASKPASS

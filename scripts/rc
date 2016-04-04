@@ -130,8 +130,11 @@ taskhelp(){
 [ "$(basename $0)" = "rcrun" ] && set run "$@"
 [ "$(basename $0)" = "rclist" ] && set list "$@"
 [ "$(basename $0)" = "rccmd" ] && set cmd "$@"
-RCSUBCMD=$1
-shift
+if [[ $1 != -* ]]
+then
+	RCSUBCMD=$1
+	shift
+fi
 
 # Loop through once to find command/task, process non-override options
 while getopts "$RCOPTS" OPT
@@ -201,7 +204,7 @@ case $RCSUBCMD in
 	run)
 		RCJOB=$RCARG1
 		# shift away rc options and arguments, the rest go to the job
-		shift $((OPTIND + 1))
+		shift $((OPTIND))
 		export RCROOT # jobs may need to know this, for e.g. including libslocal/(lib).sh
 		export RCSITE # make sure jobs run in the correct site
 		for RCJOBDIR in sites/$RCSITE sites/common defaultsite
@@ -390,9 +393,9 @@ piper(){
 			SUDOPASS)
 				# To supply a sudo password we have to jump through some hoops
 				# with a very temporary sudo askpass helper script
-				RCASKPASS=/tmp/rc-helper-$(date | md5sum | cut -f 1 -d' ').sh
-				echo "export SUDO_ASKPASS=$RCASKPASS"
-				echo "echo '#!/bin/bash' > $RCASKPASS"
+				RCASKPASS=rc-helper-$(date | md5sum | cut -f 1 -d' ').sh
+				echo "export SUDO_ASKPASS=\$HOME/$RCASKPASS"
+				echo "echo '#!/bin/bash' > \$HOME/$RCASKPASS"
 				[ -n "$RCDRYRUN" ] && echo "RCSUDOPASS=\"echo <password>\""
 				if [ -z "$RCDRYRUN" ]
 				then
@@ -401,7 +404,9 @@ piper(){
 					[ -n "$RCTRACE" ] && echo "set -x"
 				fi
 				cat $RCROOT/libsremote/sudosetup.sh
-				echo "rm -f $RCASKPASS"
+				# This will fail if user's $HOME != /home/$SUDO_USER
+				# but the file will be removed below after sudo exits
+				echo "rm -f /home/\$SUDO_USER/$RCASKPASS"
 				;;
 			SUDONOPASS)
 				# When there's no password required, we just sudo su
@@ -435,7 +440,11 @@ piper(){
 	# Finally, run the task
 	cat $RCSCRIPTPATH
 	# Close the sudo verbatim heredoc started in sudosetup.sh
-	[ -n "$RCSUDOPASS" ] && echo "RCSUDOSCRIPTEOF" || :
+	if [ -n "$RCSUDOPASS" ]
+	then
+		echo "RCSUDOSCRIPTEOF"
+		echo "rm -f $SUDO_ASKPASS"
+	fi
 }
 
 # Should output go to files?

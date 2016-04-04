@@ -33,7 +33,7 @@ listsitetasks(){
 				echo -n ":${SCRIPTCONF#*:}"
 				[ -n "$RCTASKLINE" ] && echo ";${RCTASKLINE#*:}" || echo
 			else
-				[ -n "$RCTASKLINE" ] && echo ":${RCTASKLINE#*:}"
+				[ -n "$RCTASKLINE" ] && echo ":${RCTASKLINE#*:}" || echo
 			fi
 		done
 	fi

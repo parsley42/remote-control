@@ -86,14 +86,14 @@ HOSTCOUNT=($PATCHHOST)
 
 # Sanity check - can the host even be reached?
 status "Checking connectivity to $PATCHHOST..."
-rc ping $PATCHHOST || { echo "Unable to reach $PATCHHOST"; exit 1; }
+rcdo ping $PATCHHOST || { echo "Unable to reach $PATCHHOST"; exit 1; }
 echo "OK"
 
 if [ -z "$FORCEPATCHING" ]
 then
 	status "Checking if patches are needed..."
 	set +e
-	rc yumcheck $PATCHHOST
+	rcdo yumcheck $PATCHHOST
 	YCRETVAL=$?
 	set -e
 	if [ $YCRETVAL -eq 100 ]
@@ -131,7 +131,7 @@ fi
 # Schedule the actual patch job
 
 PATCHJOB=$(cat <<EOF
-rc job dopatch $MAILARG "$CONTACT" $PATCHHOST
+rcrun dopatch $MAILARG "$CONTACT" $PATCHHOST
 EOF
 )
 status "Scheduling patching job at \"$TIMESPEC\""

@@ -34,14 +34,14 @@ trap 'cleanup' EXIT
 exec &> $LOG
 
 status "Calling yumupdate -r for $PATCHHOST"
-if rc yumupdate -r $PATCHHOST
+if rcdo yumupdate -r $PATCHHOST
 then
 	status "Patching succeeded, sleeping 2 minutes for host to complete reboot"
 	sleep 2m
 	for TRY in {1..10}
 	do
 		status "trying to ping $PATCHHOST"
-		rc ping $PATCHHOST && break || :
+		rcdo ping $PATCHHOST && break || :
 		if [ $TRY -eq 10 ]
 		then
 			mail -r $RCADMINMAIL -s "FAILED patching of $PATCHHOST, didn't return after reboot" $RCADMINMAIL < $LOG
@@ -53,8 +53,8 @@ then
 	done
 	echo "$PATCHHOST is awake"
 	status "Sending notifications"
-	OSVER=$(rc cmd "cat /etc/system-release" $PATCHHOST) || OSVER="error"
-	KERNELVER=$(rc cmd "uname -srv" $PATCHHOST) || KERNELVER="error"
+	OSVER=$(rccmd "cat /etc/system-release" $PATCHHOST) || OSVER="error"
+	KERNELVER=$(rccmd "uname -srv" $PATCHHOST) || KERNELVER="error"
 	eval POSTPATCHSUBJECT=\""$RCPOSTPATCHSUBJECT"\"
 	# Several hoops to jump through to expand things the way we want...
 	eval POSTPATCHMESSAGE=\""$RCPOSTPATCHMESSAGE"\"

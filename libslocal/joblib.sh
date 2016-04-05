@@ -17,7 +17,11 @@ writejobdefs(){
 	RCJOBSCRIPT=$1
 	findrcvars
 	RCDEFSOUT="$RCRESUMEDIR/${RCJOBID}.defs"
-	echo "RCJOB=$RCJOB" > "$RCDEFSOUT"
+	cat > "$RCDEFSOUT" << EOF
+RCJOB=$RCJOB
+RCJOBSCRIPT=$RCJOBSCRIPT
+RCROOT=$RCROOT
+EOF
 	if [ -n "$RCREQUIRECONFIRM" ]
 	then
 		echo "RCREQUIRECONFIRM=$RCREQUIRECONFIRM" >> "$RCDEFSOUT"
@@ -98,6 +102,9 @@ catjob(){
 	local RCJOBPATH="$1"
 	shift
 	local RCDEFPATH
+	echo "#!/bin/bash -e"
+	# Clean up right away
+	echo "rm -f $RCJOBTMP"
 	[ -e ~/.rcconfig ] && { echo "#### INCLUDING ~/.rcconfig"; cat ~/.rcconfig; echo; }
 	for RCJOBDEFPATH in "$RCROOT/defaultsite" "$RCROOT/sites/common" "$RCROOT/sites/$RCSITE"
 	do
@@ -123,6 +130,7 @@ catjob(){
 	echo "jobtrap"
 	echo "#### JOBSCRIPT: \"$RCJOBPATH\""
 	echo set -- "$@"
+	[ -n "$RCTRACE" ] && echo "set -x"
 	echo "RCFIRSTLINE=\$LINENO"
 	cat "$RCJOBPATH"
 }

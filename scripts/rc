@@ -111,7 +111,7 @@ rc do (options) <task> (taskoptions) (taskarguments) (hostspec)
 		-S
 			Run multiple hosts in serial (default parallel)
 		-t
-			Set trace debugging during remote execution
+			Set trace debugging during task/job execution
 	(taskoptions)
 		'-h' will give usage for the task
 	(arguments) are any arguments required by the task
@@ -249,10 +249,10 @@ case $RCSUBCMD in
 				[ -z "$RCJOBHELP" ] && writejobdefs "$RCJOBSCRIPT"
 				if [ -z "$RCDRYRUN" ]
 				then
-					set +e
-					trap - ERR
-					catjob "$RCJOBSCRIPT" $RCJOBHELP | /bin/bash -e
-					exit $?
+					RCJOBTMP=$(mktemp $RCROOT/scripts/rcjob-XXXXXX.sh)
+					catjob "$RCJOBSCRIPT" $RCJOBHELP > $RCJOBTMP
+					chmod u+x $RCJOBTMP
+					exec $RCJOBTMP
 				else
 					echo "*** DRY RUN ***" >&2
 					catjob "$RCJOBSCRIPT" $RCJOBHELP

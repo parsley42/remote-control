@@ -41,7 +41,8 @@ processvars
 
 # Sanity check - can the host even be reached?
 status "Checking connectivity to $PATCHHOST..."
-rcdo ping $PATCHHOST || { echo "Unable to reach $PATCHHOST"; exit 1; }
+#rcdo ping $PATCHHOST || { echo "Unable to reach $PATCHHOST"; exit 1; }
+rcdo ping $PATCHHOST
 echo "OK"
 
 if [ "$FORCE" != "true" ]

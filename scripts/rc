@@ -14,7 +14,9 @@ shopt -s expand_aliases # for functrap
 # Functions for resolving supplied hosts
 . $RCROOT/libslocal/hostlib.sh
 # For looking up a task
-. $RCROOT/libslocal/taskinfo.sh
+. $RCROOT/libslocal/tasklib.sh
+# For running/continuing jobs
+. $RCROOT/libslocal/joblib.sh
 # Other rc functions that may be useful for jobs
 . $RCROOT/libslocal/common.sh
 
@@ -52,7 +54,7 @@ RCSCRIPTOPTS=":h"
 RCREQUIREDARGS=0
 
 # Options string for rc
-RCOPTS=":d:DE:hH:o:s:St"
+RCOPTS=":cd:DE:hH:o:ps:St"
 usage(){
 	cat >&2 <<EOF
 Usage:
@@ -73,8 +75,10 @@ rc list jobs (site)
 rc cmd (options) "<command>" (hostspec)
 	Run a single command
 
-rc run (options) <job> (joboptions) (jobargs)
-	Wrapper for exec'ing jobs/<job>
+rc resume <jobid> ("var=value" ...)
+
+rc run (options) <job> (help | "var=value" ...)
+	Run a job with the given variables (which may override defaults)
 
 rc do (options) <task> (taskoptions) (taskarguments) (hostspec)
 	<task> is the name of the task to be run, e.g. 'whois'
@@ -84,13 +88,14 @@ rc do (options) <task> (taskoptions) (taskarguments) (hostspec)
 		a space-separated combination of hosts, aliases and hostgroups
 		enclosed in quotes.
 
-	(options) are options to rc which may override defaults from
-	tasks.conf files
+	(options)
 		-d <file>
-			use <file> for the task .defs (variable definitions) file, possibly
-			overriding a default
+			Specify a .defs file that is evaluated after any/all
+			configured definitions file (for jobs and tasks)
+		-c
+			Require confirmation before a job runs
 		-D
-			dry-run, echo the output to be sent but don't send
+			dry-run, echo the output to be sent but don't send (tasks)
 		-h (task)
 			print this help message or task help
 		-H <host> | "<host> <host> ..." | @HOSTGROUP
@@ -99,6 +104,8 @@ rc do (options) <task> (taskoptions) (taskarguments) (hostspec)
 			Don't send remote libraries, e.g. -E errtrap.sh
 		-o <dir>
 			Send output from task to <dir>/<hostname>.out
+		-p
+			Prompt for job vars
 		-s <site>
 			Use <site>
 		-S
@@ -140,6 +147,9 @@ fi
 while getopts "$RCOPTS" OPT
 do
 case $OPT in
+	c)
+		RCREQUIRECONFIRM="true"
+		;;
 	h)
 		shift $((OPTIND - 1))
 		if [ -n "$1" ]
@@ -158,6 +168,9 @@ case $OPT in
 			errorout "Directory ${OPTARG} doesn't exist"
 		fi
 		RCOUTPUTDIR=${OPTARG}
+		;;
+	p)
+		RCPROMPTVARS="true"
 		;;
 	s)
 		RCSITE=${OPTARG}
@@ -201,16 +214,50 @@ case $RCSUBCMD in
 		[ -n "$RCEXECHOSTS" ] || errorout "Unable to resolve any hosts from \"$RCARG2\""
 		RCSHIFT=2
 		;;
-	run)
-		RCJOB=$RCARG1
+	run|resume)
+		if [ "$RCSUBCMD" = "run" ]
+		then
+			RCJOB=$RCARG1
+			RCJOBID=$(generateid)
+			# Read in configured default values on first run
+			for RCJOBDEFPATH in "$RCROOT/defaultsite" "$RCROOT/sites/common" "$RCROOT/sites/$RCSITE"
+			do
+				[ -e "$RCJOBDEFPATH/jobdefs/${RCJOB}.defs" ] && source "$RCJOBDEFPATH/jobdefs/${RCJOB}.defs"
+			done
+		else
+			RCJOBID=$RCARG1
+			[ ! -e "$RCRESUMEDIR/${RCJOBID}.defs" ] && errorout "Couldn't resume $RCJOBID, file not found: \"$RCRESUMEDIR/$RCJOBID.defs\""
+			source "$RCRESUMEDIR/${RCJOBID}.defs"
+		fi
 		# shift away rc options and arguments, the rest go to the job
 		shift $((OPTIND))
-		export RCROOT # jobs may need to know this, for e.g. including libslocal/(lib).sh
-		export RCSITE # make sure jobs run in the correct site
+		if [ "$1" != "help" -a "$1" != "-h" ]
+		then
+			for RCJOBVAR in "$@"
+			do
+				eval "$RCJOBVAR"
+			done
+		else
+			RCJOBHELP="help"
+		fi
+		export RCROOT RCSITE RCJOBID RCJOB
 		for RCJOBDIR in sites/$RCSITE sites/common defaultsite
 		do
 			RCJOBSCRIPT="$RCROOT/$RCJOBDIR/jobs/$RCJOB"
-			[ -e "$RCJOBSCRIPT" ] && exec $RCJOBSCRIPT "$@" || :
+			if [ -e "$RCJOBSCRIPT" ]
+			then
+				[ -z "$RCJOBHELP" ] && writejobdefs "$RCJOBSCRIPT"
+				jobtrap
+				if [ -z "$RCDRYRUN" ]
+				then
+					catjob "$RCJOBSCRIPT" $RCJOBHELP | /bin/bash -e
+				else
+					echo "*** DRY RUN ***" >&2
+					catjob "$RCJOBSCRIPT" $RCJOBHELP
+					rm -f "$RCRESUMEDIR/${RCJOBID}.defs"
+				fi
+				exit $?
+			fi
 		done
 		errorout "Job \"$RCJOB\" not found, maybe it's just a task?"
 		;;
@@ -418,7 +465,7 @@ piper(){
 		esac
 	fi
 	echo "set -e"
-	RCTASKID=$(dd if=/dev/urandom bs=16 count=1 2>/dev/null | md5sum | cut -f 1 -d' ')
+	RCTASKID=$(generateid)
 	[ -n "$RCTRACE" ] && echo "set -x"
 	# Set the task ID
 	echo "RCTASKID=$RCTASKID"

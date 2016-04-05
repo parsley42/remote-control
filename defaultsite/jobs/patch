@@ -1,105 +1,65 @@
 #!/bin/bash
 # patch - front-end job for patching remote servers
-#RCJOBREQUIREVARS="PATCHWHEN CONTACT PATCHHOST"
+#RCJOBREQUIREVARS="PATCHWHEN CONTACT PATCHHOST RCADMINMAIL"
+#RCJOBREQUIREDEFS="RCADMINMAIL"
 # This job should do pre-flight check, then schedule the dopatch job
 
 source $RCROOT/libslocal/common.sh
+source $RCROOT/libslocal/joblib.sh
 
 usage(){
-	cat <<EOF
+	cat <<"EOF"
 Usage: patch (FORCE=true) (PRENOTIFY=true) (NOTIFYWHEN=<timespec>) \
 	(PATCHWHEN=<timespec>) CONTACT=<email> PATCHHOST=<host>
 
 Patch a system at the given time, sending pre-(if configured) and post-
 notifications to CONTACT.
 EOF
-	exit 1
+	exit ${1:-1}
 }
 
-rcrequired(){
-	cat <<"EOF"
-~/.rcconfig required with:
-RCADMINMAIL - optional, can be supplied with -a option
-PREPATCHSUBJECT - optional, if pre-patch notification sent
-PREPATCHMESSAGE - optional, if pre-patch notification sent
-POSTPATCHSUBJECT
-POSTPATCHMESSAGE
-
-See example-conf/HOME.rcconfig
-EOF
-	exit 1
-}
-
-# Source the standard ~/.rcconfig, required for patch/dopatch
-if [ -e ~/.rcconfig ]
+if [ "$1" = "help" ]
 then
-	source ~/.rcconfig
-else
-	rcrequired
+	usage 0
 fi
 
-# Use bash getopts built-in for argument parsing
-while getopts ":a:fhn:" OPT
-do
-	case $OPT in
-	a)
-		RCADMINMAIL=${OPTARG}
-		MAILARG="-a $RCADMINMAIL"
-		;;
-	f)
-		FORCEPATCHING="true"
-		;;
-    h)
-		usage
-		;;
-	n)
-		PRENOTIFY="${OPTARG}"
-		;;
-    :)
-		echo "Option -$OPTARG requires an argument." >&2
-		usage
-		;;
-    \?)
-		echo "Invalid option: -$OPTARG" >&2
-		usage
-		;;
-	esac
-done
+# Depvars should handle dependencies between variables and error checking
+# of values
+depvars(){
+	if [ '$PRENOTIFY' = "true" ]
+	then
+		addrequired NOTIFYWHEN
+	else
+		removerequired NOTIFYWHEN
+	fi
+	HOSTCOUNT=($PATCHHOST)
+	[ ${#HOSTCOUNT[@]} -gt 1 ] && { echo "Can only run patch on a single host at a time"; usage; }
+}
 
-# Shift away options so that required command arguments are now in $@
-shift $((OPTIND-1))
-
-[ $# -ne 3 ] && usage
-[ -z "$RCADMINMAIL" ] && { echo "RCADMINMAIL undefined!"; rcrequired; }
-[ -z "$PREPATCHSUBJECT" ] && { echo "PREPATCHSUBJECT undefined!"; rcrequired; }
-[ -z "$PREPATCHMESSAGE" ] && { echo "PREPATCHMESSAGE undefined!"; rcrequired; }
-[ -z "$POSTPATCHSUBJECT" ] && { echo "POSTPATCHSUBJECT undefined!"; rcrequired; }
-[ -z "$POSTPATCHMESSAGE" ] && { echo "POSTPATCHMESSAGE undefined!"; rcrequired; }
-
-TIMESPEC="$1"
-CONTACT="$2"
-PATCHHOST=$3
-HOSTCOUNT=($PATCHHOST)
-[ ${#HOSTCOUNT[@]} -gt 1 ] && { echo "Can only run patch on a single host at a time"; usage; }
+# Now let rc handle simple verification that vars exist, creating a resume file if needed
+processvars
 
 # Sanity check - can the host even be reached?
 status "Checking connectivity to $PATCHHOST..."
 rcdo ping $PATCHHOST || { echo "Unable to reach $PATCHHOST"; exit 1; }
 echo "OK"
 
-if [ -z "$FORCEPATCHING" ]
+if [ "$FORCE" != "true" ]
 then
 	status "Checking if patches are needed..."
+	# It's normal to get an error return from yumcheck
 	set +e
+	trap - ERR
 	rcdo yumcheck $PATCHHOST
 	YCRETVAL=$?
 	set -e
+	jobtrap # alias defined in libslocal/errhandle.sh
 	if [ $YCRETVAL -eq 100 ]
 	then
 		echo "Patching is required"
 	elif [ $YCRETVAL -eq 0 ]
 	then
-		echo "No patching required; use -f to force"
+		echo "No patching required; set FORCE=TRUE to force"
 		exit 0
 	else
 		echo "Error $YCRETVAL returned from yum check-update, aborting."
@@ -109,9 +69,9 @@ fi
 
 # If the user is to be notified ahead of time (-n used),
 # schedule the at job.
-if [ -n "$PRENOTIFY" ]
+if [ "$PRENOTIFY" = "true" ]
 then
-	status "Pre-notification requesting, setting up automated email for \"$PRENOTIFY\""
+	status "Pre-notification requesting, setting up automated email for \"$NOTIFYWHEN\""
 	eval PREPATCHSUBJECT=\""$PREPATCHSUBJECT"\"
 	eval PREPATCHMESSAGE=\""$PREPATCHMESSAGE"\"
 	NOTIFYJOB=$(cat <<EOF
@@ -120,20 +80,20 @@ $PREPATCHMESSAGE
 MEOF
 EOF
 )
-	echo "job: at $PRENOTIFY"
+	echo "job: at $NOTIFYWHEN"
 	cat <<<"$NOTIFYJOB"
-	at $PRENOTIFY <<<"$NOTIFYJOB"
+	at $NOTIFYWHEN <<<"$NOTIFYJOB"
 	echo "Done"
 fi
 
 # Schedule the actual patch job
 
 PATCHJOB=$(cat <<EOF
-rcrun dopatch $MAILARG "$CONTACT" $PATCHHOST
+rcrun dopatch "RCADMINMAIL=$RCADMINMAIL" "CONTACT=$CONTACT" PATCHHOST=$PATCHHOST
 EOF
 )
-status "Scheduling patching job at \"$TIMESPEC\""
-echo "job: at $TIMESPEC"
+status "Scheduling patching job at \"$PATCHWHEN\""
+echo "job: at $PATCHWHEN"
 cat <<<"$PATCHJOB"
-at $TIMESPEC <<<"$PATCHJOB"
+at $PATCHWHEN <<<"$PATCHJOB"
 exit 0

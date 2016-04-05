@@ -475,7 +475,7 @@ hosterrorcheck(){
 		then
 			echo "ssh process exited with error connecting to $RCREMOTE, exit code:255" >&2
 		else
-			echo "Remote host $RCREMOTE exited with error code:$RCRETVAL" >&2
+			[ -z "$RCPARALLEL" ] && echo "Remote host $RCREMOTE exited with error code:$RCRETVAL" >&2
 		fi
 		if [ $RCNUMHOSTS -eq 1 ]
 		then
@@ -485,6 +485,7 @@ hosterrorcheck(){
 			exit $RCRETVAL
 		fi
 	fi
+	return $RCRETVAL
 }
 
 [ -z "$RCTASKNAME" ] && RCTASKNAME="$RCCOMMAND" || :
@@ -511,10 +512,12 @@ do
 					ssh $RCSSHOPTS -T $RCREMOTE > $RCOUTPUTDIR/$RCREMOTE.out 2> $RCOUTPUTDIR/$RCREMOTE.err
 					hosterrorcheck
 				) &
+				RCWAITTASKS="$RCWAITTASKS $!:$RCNICENAME"
 			else
 				(	ssh $RCSSHOPTS -T $RCREMOTE "$RCCOMMAND $*" > $RCOUTPUTDIR/$RCREMOTE.out 2> $RCOUTPUTDIR/$RCREMOTE.err
 					hosterrorcheck
 				) &
+				RCWAITTASKS="$RCWAITTASKS $!:$RCNICENAME"
 			fi
 			# Turn error trapping back on
 			set -e
@@ -533,8 +536,28 @@ do
 done
 if [ -n "$RCPARALLEL" ]
 then
+	RCSUCCEEDED=0
+	RCFAILED=0
 	echo "... waiting for all hosts to finish"
-	wait
+	for RCWAITTASKSPEC in $RCWAITTASKS
+	do
+		RCWAITTASK="${RCWAITTASKSPEC%:*}"
+		RCWAITHOST="${RCWAITTASKSPEC#*:}"
+		set +e
+		trap - ERR
+		wait $RCWAITTASK
+		RCHOSTRETVAL=$?
+		set -e
+		trap 'error_handler "${BASH_COMMAND}" ${LINENO} $?' ERR
+		if [ $RCHOSTRETVAL = 0 ]
+		then
+			RCSUCCEEDED=$((RCSUCCEEDED + 1))
+		else
+			RCFAILED=$((RCFAILED + 1))
+			errormsg "host $RCWAITHOST returned $RCHOSTRETVAL"
+		fi
+	done
+	echo "Done. $RCSUCCEEDED hosts succeeded, $RCFAILED failed."
 fi
 
 # this space intentionally left blank

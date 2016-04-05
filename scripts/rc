@@ -8,9 +8,9 @@ RCSSHOPTS="-o ConnectTimeout=5"
 
 [ -e ~/.rcconfig ] && source ~/.rcconfig
 
-shopt -s expand_aliases # for functrap
 # Functions for dealing with errors
 . $RCROOT/libslocal/errhandle.sh
+errtrap
 # Functions for resolving supplied hosts
 . $RCROOT/libslocal/hostlib.sh
 # For looking up a task
@@ -240,17 +240,19 @@ case $RCSUBCMD in
 		else
 			RCJOBHELP="help"
 		fi
-		export RCROOT RCSITE RCJOBID RCJOB
 		for RCJOBDIR in sites/$RCSITE sites/common defaultsite
 		do
 			RCJOBSCRIPT="$RCROOT/$RCJOBDIR/jobs/$RCJOB"
 			if [ -e "$RCJOBSCRIPT" ]
 			then
+				export RCROOT RCSITE RCJOBID RCJOB RCJOBSCRIPT
 				[ -z "$RCJOBHELP" ] && writejobdefs "$RCJOBSCRIPT"
-				jobtrap
 				if [ -z "$RCDRYRUN" ]
 				then
+					set +e
+					trap - ERR
 					catjob "$RCJOBSCRIPT" $RCJOBHELP | /bin/bash -e
+					exit $?
 				else
 					echo "*** DRY RUN ***" >&2
 					catjob "$RCJOBSCRIPT" $RCJOBHELP

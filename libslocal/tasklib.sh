@@ -24,7 +24,7 @@ taskdefs (){
 
 # List all site tasks for list command
 listsitetasks(){
-	functrap
+	trap 'func_error_handler ${FUNCNAME[0]} "${BASH_COMMAND}" $LINENO $?' ERR
 	local RCSITESCRIPT RCSCRIPT SCRIPTCONF SITE RCTASKLINE
 	if [ "$1" = defaultsite ]
 	then
@@ -63,7 +63,7 @@ listsitetasks(){
 
 # Get RCCOMMAND or RCSCRIPT (full path) for RCTASKNAME, and configuration (RCELEVATE, etc.)
 gettaskconf(){
-	functrap
+	trap 'func_error_handler ${FUNCNAME[0]} "${BASH_COMMAND}" $LINENO $?' ERR
 	local RCTASKNAME=$1
 	local SITE
 	# Look for task configuration first - userconf first, then RCSITE, common, default; first wins

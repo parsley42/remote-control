@@ -6,7 +6,6 @@ RCROOT=$(dirname $RCDIR)
 
 [ -e ~/.rcconfig ] && source ~/.rcconfig
 
-shopt -s expand_aliases # for functrap
 # Functions for dealing with errors
 . $RCROOT/libslocal/errhandle.sh
 # Functions for resolving supplied hosts

@@ -11,6 +11,12 @@ RCSSHOPTS="-o ConnectTimeout=5"
 [ -e ~/.rcconfig ] && source ~/.rcconfig
 [ -n "$RCSAVESITE" ] && RCSITE="$RCSAVESITE"
 
+# Default temporary script dir to $HOME if unconfigured, probably just for
+# bootstrapping (install). Since CentOS7 and presumably other distros
+# harden /tmp and /var/tmp, you can't create executables there.
+RCSCRIPTTMPDIR=${RCSCRIPTTMPDIR:-$HOME}
+RCRESUMEDIR=${RCRESUMEDIR:-/var/tmp}
+
 # Functions for dealing with errors
 . $RCROOT/libslocal/errhandle.sh
 errtrap
@@ -217,8 +223,8 @@ case $RCSUBCMD in
 			done
 		else
 			RCJOBID=$RCARG1
-			[ ! -e "$RCRESUMEDIR/${RCJOBID}.defs" ] && errorout "Couldn't resume $RCJOBID, file not found: \"$RCRESUMEDIR/$RCJOBID.defs\""
-			source "$RCRESUMEDIR/${RCJOBID}.defs"
+			[ ! -e "$RCRESUMEDIR/rc-resume-${RCJOBID}.defs" ] && errorout "Couldn't resume $RCJOBID, file not found: \"$RCRESUMEDIR/rc-resume-${RCJOBID}.defs\""
+			source "$RCRESUMEDIR/rc-resume-${RCJOBID}.defs"
 		fi
 		# shift away rc options and arguments, the rest go to the job
 		shift $((OPTIND))

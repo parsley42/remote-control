@@ -16,7 +16,7 @@ writejobdefs(){
 	local RCJOBCFGLINE RCJOBSCRIPT RCREQUIRELINE RCVARLINE RCVAR
 	RCJOBSCRIPT=$1
 	findrcvars
-	RCDEFSOUT="$RCRESUMEDIR/${RCJOBID}.defs"
+	RCDEFSOUT="$RCRESUMEDIR/rc-resume-${RCJOBID}.defs"
 	cat > "$RCDEFSOUT" << EOF
 RCJOB=$RCJOB
 RCJOBSCRIPT=$RCJOBSCRIPT
@@ -29,18 +29,18 @@ EOF
 		then
 			echo "RCCONFIRMCODE=$RCCONFIRMCODE" >> "$RCDEFSOUT"
 		else
-			echo "RCCONFIRMCODE=$(generateid)" >> "$RCDEFSOUT"
+			echo "RCCONFIRMCODE=$RCJOBID" >> "$RCDEFSOUT"
 		fi
 	else
 		echo "RCREQUIRECONFIRM=\"\"" >> "$RCDEFSOUT"
 	fi
-	if [ -n "$RCJOBREQUIREVARS" ]
+	if [ -n "$RCREQVARS" ]
 	then
-		echo "RCJOBREQUIREVARS=\"$RCJOBREQUIREVARS\"" >> "$RCDEFSOUT"
+		echo "RCREQVARS=\"$RCREQVARS\"" >> "$RCDEFSOUT"
 	else
-		RCREQUIRELINE=$(grep -h "^#RCJOBREQUIREVARS=" "$RCJOBSCRIPT" || :)
+		RCREQUIRELINE=$(grep -h "^#RCREQVARS=" "$RCJOBSCRIPT" || :)
 		[ -n "$RCREQUIRELINE" ] && eval ${RCREQUIRELINE#\#}
-		echo "RCJOBREQUIREVARS=\"$RCJOBREQUIREVARS\"" >> "$RCDEFSOUT"
+		echo "RCREQVARS=\"$RCREQVARS\"" >> "$RCDEFSOUT"
 	fi
 	if [ -e "$RCVARSFILE" ]
 	then
@@ -56,10 +56,10 @@ EOF
 checkrequireddefs(){
 	local ALLMET DEFLINE REQUIRE
 	ALLMET="true"
-	DEFLINE=$(grep -h "^#RCJOBREQUIREDEFS=" "$RCJOBSCRIPT")
+	DEFLINE=$(grep -h "^#RCREQDEFS=" "$RCJOBSCRIPT")
 	[ -n "$DEFLINE" ] && eval ${DEFLINE#\#}
 	# first check vars that must be defined in a .defs file
-	for REQUIRE in $RCJOBREQUIREDEFS
+	for REQUIRE in $RCREQDEFS
 	do
 		if [ -z "${!REQUIRE}" ]
 		then
@@ -80,7 +80,7 @@ processvars(){
 	findrcvars
 	# See if the job defined a depvars function
 	type depvars &>/dev/null && DEPVARS="true" || :
-	for REQUIRE in $RCJOBREQUIREVARS
+	for REQUIRE in $RCREQVARS
 	do
 		if [ -z "${!REQUIRE}" ]
 		then
@@ -139,20 +139,20 @@ addrequired(){
 	local REQUIRE
 	for REQUIRE in $*
 	do
-		echo " $RCJOBREQUIREVARS " | grep -q " $REQUIRE " || RCJOBREQUIREVARS="$RCJOBREQUIREVARS $REQUIRE"
+		echo " $RCREQVARS " | grep -q " $REQUIRE " || RCREQVARS="$RCREQVARS $REQUIRE"
 	done
-	RCJOBREQUIREVARS=${RCJOBREQUIREVARS# }
-	RCJOBREQUIREVARS=${RCJOBREQUIREVARS% }
+	RCREQVARS=${RCREQVARS# }
+	RCREQVARS=${RCREQVARS% }
 }
 
 removerequired(){
 	local NEWREQUIRES=""
 	local REMOVE="$*"
 	local REQUIRE
-	for REQUIRE in $RCJOBREQUIREVARS
+	for REQUIRE in $RCREQVARS
 	do
 		echo " $REMOVE " | grep -q " $REQUIRE " || NEWREQUIRES="$NEWREQUIRES $REQUIRE"
 	done
-	RCJOBREQUIREVARS=${NEWREQUIRES# }
-	RCJOBREQUIREVARS=${RCJOBREQUIREVARS% }
+	RCREQVARS=${NEWREQUIRES# }
+	RCREQVARS=${RCREQVARS% }
 }

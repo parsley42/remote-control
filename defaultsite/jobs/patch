@@ -12,14 +12,15 @@
 # values will be shown for confirmation (when confirmation required)
 #RCOPTVARS="NOTIFYWHEN RCADMINMAIL"
 #RCREQDEFS="RCADMINMAIL PREPATCHSUBJECT PREPATCHMESSAGE POSTPATCHSUBJECT POSTPATCHMESSAGE"
-# Variable specifications: VARNAME:<match regex>:(default value):<description>
+# Variable specifications for user-supplied (not configured in a .defs file)
+# vars. Format: #VARNAME:<pcre match regex>:(default value):<description>
 #RCADMINMAIL:^[a-z_\d\.-]+\@[\da-z\.-]+\.[a-z\.]{2,6}$::From address on notifications, address to send sysadmin reports to
-#FORCE:true|false:false:Patch host even when not required when set "true"
-#PRENOTIFY:true|false:false:Send notification before patching when set "true"
-#NOTIFYWHEN:When to send notification ('at' timespec)
-#PATCHWHEN:When to patch the host
-#CONTACT:Contact for the host that receives notifications
-#PATCHHOST:The host to be patched
+#FORCE:false|true:false:Patch host even when not required when set "true"
+#PRENOTIFY:false|true:false:Send notification before patching when set "true"
+#NOTIFYWHEN:.*::When to send notification ('at' timespec)
+#PATCHWHEN:.*::When to patch the host ('at' timespec)
+#CONTACT:^[a-z_\d\.-]+\@[\da-z\.-]+\.[a-z\.]{2,6}$::Contact for the host that receives notifications
+#PATCHHOST:[\da-z\.-]+::The host to be patched
 # *** end of rc metadata
 
 # This job should do pre-flight check, then schedule the dopatch job
@@ -49,11 +50,10 @@ depvars(){
 	else
 		removerequired NOTIFYWHEN
 	fi
-	HOSTCOUNT=($PATCHHOST)
-	[ ${#HOSTCOUNT[@]} -gt 1 ] && { echo "Can only run patch on a single host at a time"; usage; }
 }
 
-# Now let rc handle simple verification that vars exist, creating a resume file if needed
+# Now let rc lib handle var checking, prompting, confirmation, regex matching,
+# etc.
 processvars
 
 # Sanity check - can the host even be reached?

@@ -1,11 +1,28 @@
 #!/bin/bash
 # patch - front-end job for patching remote servers
-#RCJOBREQUIREVARS="PATCHWHEN CONTACT PATCHHOST RCADMINMAIL"
-#RCJOBREQUIREDEFS="RCADMINMAIL"
-# This job should do pre-flight check, then schedule the dopatch job
 
-source $RCROOT/libslocal/common.sh
-source $RCROOT/libslocal/joblib.sh
+# *** remote-control metadata, parsed by rc
+# Job configuration - the patch job will ask for confirmation before
+# running.
+#RCCONFIG:RCCONFIRM="true"
+# Initially required vars that must be set for the job to run.
+# These may be modified by the depvars function.
+#RCREQVARS="PATCHWHEN CONTACT PATCHHOST PRENOTIFY"
+# Optional vars aren't required for the job to run, but their
+# values will be shown for confirmation (when confirmation required)
+#RCOPTVARS="NOTIFYWHEN RCADMINMAIL"
+#RCREQDEFS="RCADMINMAIL PREPATCHSUBJECT PREPATCHMESSAGE POSTPATCHSUBJECT POSTPATCHMESSAGE"
+# Variable specifications: VARNAME:<match regex>:(default value):<description>
+#RCADMINMAIL:^[a-z_\d\.-]+\@[\da-z\.-]+\.[a-z\.]{2,6}$::From address on notifications, address to send sysadmin reports to
+#FORCE:true|false:false:Patch host even when not required when set "true"
+#PRENOTIFY:true|false:false:Send notification before patching when set "true"
+#NOTIFYWHEN:When to send notification ('at' timespec)
+#PATCHWHEN:When to patch the host
+#CONTACT:Contact for the host that receives notifications
+#PATCHHOST:The host to be patched
+# *** end of rc metadata
+
+# This job should do pre-flight check, then schedule the dopatch job
 
 usage(){
 	cat <<"EOF"
@@ -18,7 +35,7 @@ EOF
 	exit ${1:-1}
 }
 
-if [ "$1" = "help" ]
+if [ "$1" = "help" -o "$1" = "-h" ]
 then
 	usage 0
 fi

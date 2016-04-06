@@ -1,4 +1,0 @@
-- Creat sites/common for user scripts; search path for tasks/jobs:
-	- $RCSITE
-	- common
-	- default (distributed)

@@ -1,24 +1,12 @@
-# ~/.rcconfig example
-# your email address for notifications
-#RCADMINMAIL=me@my.domain
-# Path to pipe/fifo for passdaemon (keeps sudo elevate password in memory)
-#RCPASSPIPE=~/.rc.pass
-# ~/.rcconfig example
-# Subject of contact reminder email for patching
-#RCPREPATCHSUBJECT='Reminder of upcoming patching/reboot of $PATCHHOST'
-# Be sure and stick to the format to get the desired results, including
-# the single tick to prevent variable interpolation during initial read
-# (which are handled later by an eval), and escaping double quotes with a \.
-# Besides $RCADMINMAIL, you can substitute in $PATCHHOST and $TIMESPEC
-# (when it'll patch).
-#RCPREPATCHMESSAGE=\
-#'This is a reminder that $PATCHHOST has been scheduled to have updates applied
-#and be rebooted at \"$TIMESPEC\". If a conflict has arisen and updates need to
-#be rescheduled, please email sysadmin@my.domain.'
-#RCPOSTPATCHSUBJECT='Patching of $PATCHHOST completed'
-#RCPOSTPATCHMESSAGE=\
-#'Patching and rebooting of $PATCHHOST has been completed.
-#The current OS patch level is: $OSVER
-#The current kernel is: $KERNELVER
-#
-#If you find any issues with your server, please contact sysadmin@my.domain.'
+RCSITE=<site I normally work with>
+RCADMINMAIL=<my email address>
+# Path to pipe/fifo for passdaemon (keeps elevate password in memory
+# for e.g. sudo)
+RCPASSPIPE=$HOME/.rc.pass
+# Location to store temporary files for jobs in progress which need more vars
+# defined. This should be cleaned out from time to time by a cron job.
+RCRESUMEDIR=/var/tmp
+# Location to write out scripts composed locally from defs, functions, and
+# task/job scripts. These are generally deleted in the first line of the
+# generated script, and should never need manual cleaning.
+RCSCRIPTTMPDIR=$HOME/bin

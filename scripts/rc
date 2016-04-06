@@ -1,12 +1,15 @@
 #!/bin/bash -e
-# rc - remote control w/ ssh, for general-purpose task automation
+# rc - remote control w/ ssh, for general-purpose task and job automation
 
 RCDIR=$(dirname `readlink -f $0`)
 RCROOT=$(dirname $RCDIR)
 
 RCSSHOPTS="-o ConnectTimeout=5"
 
+# We want RCSITE in environment to supersede a configured value
+[ -n "$RCSITE" ] && RCSAVESITE=$RCSITE
 [ -e ~/.rcconfig ] && source ~/.rcconfig
+[ -n "$RCSAVESITE" ] && RCSITE="$RCSAVESITE"
 
 # Functions for dealing with errors
 . $RCROOT/libslocal/errhandle.sh
@@ -23,27 +26,15 @@ errtrap
 # Try to figure out the site to use
 if [ -z "$RCSITE" ] # environment variable overrides ~/.rcsite
 then
-	if [ -e ~/.rcsite ]
+	# If there's only one site, default to that
+	RCSITECOUNT=$(ls $RCROOT/sites | wc -l)
+	if [ $RCSITECOUNT -eq 1 ]
 	then
-		# ~/.rcsite should contain no more/less than RCSITE=xxx
-		. ~/.rcsite
+		RCSITE=$(ls $RCROOT/sites)
 	else
-		# If there's only one site, default to that
-		RCSITECOUNT=$(ls $RCROOT/sites | wc -l)
-		if [ $RCSITECOUNT -gt 2 ]
-		then
-			errorout "Multiple sites found and RCSITE not set, aborting."
-		elif [ $RCSITECOUNT -eq 1 ]
-		then
-			RCSITE=$(ls $RCROOT/sites)
-		else
-			errorout "At least one site required in $RCROOT/sites"
-		fi
+		RCSITE="FooBarBaz" # This makes other coding a little less painful.
+		# In practice it just means more failed tests in rc's search paths
 	fi
-fi
-if [ ! -d "$RCROOT/sites/$RCSITE" ]
-then
-	errorout "RCSITE ($RCSITE) refers to non-existent directory ($RCROOT/sites/$RCSITE)"
 fi
 
 # Default options - override rc.tasks

@@ -25,6 +25,7 @@ errtrap
 # For looking up a task
 . $RCROOT/libslocal/tasklib.sh
 # For running/continuing jobs
+. $RCROOT/libslocal/jobapi.sh
 . $RCROOT/libslocal/joblib.sh
 # Other rc functions that may be useful for jobs
 . $RCROOT/libslocal/common.sh
@@ -51,7 +52,7 @@ RCSCRIPTOPTS=":h"
 RCREQUIREDARGS=0
 
 # Options string for rc
-RCOPTS=":cd:DE:hH:o:ps:St"
+RCOPTS=":cd:DE:hH:o:s:St"
 usage(){
 	cat >&2 <<EOF
 Usage:
@@ -101,8 +102,6 @@ rc do (options) <task> (taskoptions) (taskarguments) (hostspec)
 			Don't send remote libraries, e.g. -E errtrap.sh
 		-o <dir>
 			Send output from task to <dir>/<hostname>.out
-		-p
-			Prompt for job vars
 		-s <site>
 			Use <site>
 		-S
@@ -166,9 +165,6 @@ case $OPT in
 		fi
 		RCOUTPUTDIR=${OPTARG}
 		;;
-	p)
-		RCPROMPTVARS="true"
-		;;
 	s)
 		RCSITE=${OPTARG}
 		if [ ! -d "$RCROOT/sites/$RCSITE" ]
@@ -217,9 +213,15 @@ case $RCSUBCMD in
 			RCJOB=$RCARG1
 			RCJOBID=$(generateid)
 			# Read in configured default values on first run
+			# Note that .rcconfig has already been sourced, message here is for informational purposes
+			[ -e ~/.rcconfig ] && echo "Sourcing ~/.rcconfig"
 			for RCJOBDEFPATH in "$RCROOT/defaultsite" "$RCROOT/sites/common" "$RCROOT/sites/$RCSITE"
 			do
-				[ -e "$RCJOBDEFPATH/jobdefs/${RCJOB}.defs" ] && source "$RCJOBDEFPATH/jobdefs/${RCJOB}.defs"
+				if [ -e "$RCJOBDEFPATH/jobdefs/${RCJOB}.defs" ]
+				then
+					echo "Sourcing $RCJOBDEFPATH/jobdefs/${RCJOB}.defs"
+					source "$RCJOBDEFPATH/jobdefs/${RCJOB}.defs"
+				fi
 			done
 		else
 			RCJOBID=$RCARG1
@@ -243,7 +245,7 @@ case $RCSUBCMD in
 			if [ -e "$RCJOBSCRIPT" ]
 			then
 				export RCROOT RCSITE RCJOBID RCJOB RCJOBSCRIPT
-				[ -z "$RCJOBHELP" ] && writejobdefs "$RCJOBSCRIPT"
+				[ -z "$RCJOBHELP" ] && writeresumefile "$RCJOBSCRIPT"
 				if [ -z "$RCDRYRUN" ]
 				then
 					RCJOBTMP=$(mktemp $RCROOT/scripts/rcjob-XXXXXX.sh)

@@ -10,7 +10,7 @@
 #RCREQVARS="PATCHWHEN CONTACT PATCHHOST PRENOTIFY"
 # Optional vars aren't required for the job to run, but their
 # values will be shown for confirmation (when confirmation required)
-#RCOPTVARS="NOTIFYWHEN RCADMINMAIL"
+#RCOPTVARS="RCADMINMAIL"
 #RCREQDEFS="RCADMINMAIL PREPATCHSUBJECT PREPATCHMESSAGE POSTPATCHSUBJECT POSTPATCHMESSAGE"
 # Variable specifications for user-supplied (not configured in a .defs file)
 # vars. Format: #VARNAME:<pcre match regex>:(default value):<description>

@@ -36,6 +36,9 @@ if rcdo yumupdate -r $PATCHHOST
 then
 	status "Patching succeeded, sleeping 2 minutes for host to complete reboot"
 	sleep 2m
+	# Check the log output from yum and update the subject if needed.
+	MAILSUBJECT="Patching succeeded for $PATCHHOST"
+	grep -qi 'warning\|error' $LOG && MAILSUBJECT="Warning(s)/Error(s) while patching $PATCHHOST"
 	for TRY in {1..10}
 	do
 		status "trying to ping $PATCHHOST"
@@ -58,8 +61,6 @@ then
 	eval POSTPATCHMESSAGE=\""$POSTPATCHMESSAGE"\"
 	mail -r $ADMINMAIL -s "$POSTPATCHSUBJECT" $CONTACT <<<"$POSTPATCHMESSAGE"
 	echo "Done"
-	MAILSUBJECT="Patching succeeded for $PATCHHOST"
-	grep -qi 'warning\|error' $LOG && MAILSUBJECT="Warning(s)/Error(s) while patching $PATCHHOST"
 	mail -r $ADMINMAIL -s "$MAILSUBJECT" $ADMINMAIL < $LOG
 else
 	status "Patch/reboot failed, sending notify to sysadmin"

@@ -10,11 +10,15 @@
 #RCREQVARS="PATCHWHEN CONTACT PATCHHOST PRENOTIFY"
 # Optional vars aren't required for the job to run, but their
 # values will be shown for confirmation (when confirmation required)
-#RCOPTVARS="RCADMINMAIL"
+#RCOPTVARS="ADMINMAIL FORCE"
+# Definitions that must be in a *.defs file. If a defs file specifies
+# a value for a required or optional variable, it will always override
+# user input. TODO: check for this error condition
 #RCREQDEFS="RCADMINMAIL PREPATCHSUBJECT PREPATCHMESSAGE POSTPATCHSUBJECT POSTPATCHMESSAGE"
 # Variable specifications for user-supplied (not configured in a .defs file)
 # vars. Format: #VARNAME:<pcre match regex>:(default value):<description>
-#RCADMINMAIL:^[a-z_\d\.-]+\@[\da-z\.-]+\.[a-z\.]{2,6}$::From address on notifications, address to send sysadmin reports to
+# Note that ':' is illegal in the description (for syntax checking)
+#ADMINMAIL:^[a-z_\d\.-]+\@[\da-z\.-]+\.[a-z\.]{2,6}$::From address on notifications, address to send sysadmin reports to
 #FORCE:false|true:false:Patch host even when not required when set "true"
 #PRENOTIFY:false|true:false:Send notification before patching when set "true"
 #NOTIFYWHEN:.*::When to send notification ('at' timespec)
@@ -56,6 +60,9 @@ depvars(){
 # etc.
 processvars
 
+# Default ADMINMAIL to RCADMINMAIL if ADMINMAIL wasn't passed in
+ADMINMAIL=${ADMINMAIL:-$RCADMINMAIL}
+
 # Sanity check - can the host even be reached?
 status "Checking connectivity to $PATCHHOST..."
 #rcdo ping $PATCHHOST || { echo "Unable to reach $PATCHHOST"; exit 1; }
@@ -77,7 +84,7 @@ then
 		echo "Patching is required"
 	elif [ $YCRETVAL -eq 0 ]
 	then
-		echo "No patching required; set FORCE=TRUE to force"
+		echo "No patching required; set FORCE=\"true\" to force"
 		exit 0
 	else
 		echo "Error $YCRETVAL returned from yum check-update, aborting."
@@ -93,7 +100,7 @@ then
 	eval PREPATCHSUBJECT=\""$PREPATCHSUBJECT"\"
 	eval PREPATCHMESSAGE=\""$PREPATCHMESSAGE"\"
 	NOTIFYJOB=$(cat <<EOF
-mail -r $RCADMINMAIL -s "$PREPATCHSUBJECT" $CONTACT <<MEOF
+mail -r $ADMINMAIL -s "$PREPATCHSUBJECT" $CONTACT <<MEOF
 $PREPATCHMESSAGE
 MEOF
 EOF
@@ -107,7 +114,7 @@ fi
 # Schedule the actual patch job
 
 PATCHJOB=$(cat <<EOF
-rcrun dopatch "RCADMINMAIL=$RCADMINMAIL" "CONTACT=$CONTACT" PATCHHOST=$PATCHHOST
+rcrun dopatch "ADMINMAIL=$ADMINMAIL" "CONTACT=$CONTACT" PATCHHOST=$PATCHHOST
 EOF
 )
 status "Scheduling patching job at \"$PATCHWHEN\""

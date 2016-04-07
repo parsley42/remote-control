@@ -87,11 +87,11 @@ rc do (options) <task> (taskoptions) (taskarguments) (hostspec)
 		enclosed in quotes.
 
 	(options)
+		-c
+			Require confirmation before a job runs
 		-d <file>
 			Specify a .defs file that is evaluated after any/all
 			configured definitions file (for jobs and tasks)
-		-c
-			Require confirmation before a job runs
 		-D
 			dry-run, echo the output to be sent but don't send (tasks)
 		-h (task)
@@ -155,6 +155,10 @@ case $OPT in
 			usage
 		fi
 		;;
+	d)
+		RCDEFSFILE=${OPTARG}
+		[ ! -e "$RCDEFSFILE" ] && errorout "Unable to locate definitions file $RCDEFSFILE"
+		;;
 	D)
 		RCDRYRUN=true
 		;;
@@ -215,19 +219,49 @@ case $RCSUBCMD in
 			# Read in configured default values on first run
 			# Note that .rcconfig has already been sourced, message here is for informational purposes
 			[ -e ~/.rcconfig ] && echo "Sourcing ~/.rcconfig"
-			for RCJOBDEFPATH in "$RCROOT/defaultsite" "$RCROOT/sites/common" "$RCROOT/sites/$RCSITE"
+			# Locate the job script
+			for RCJOBDIR in sites/$RCSITE sites/common defaultsite
 			do
-				if [ -e "$RCJOBDEFPATH/jobdefs/${RCJOB}.defs" ]
+				RCJOBSCRIPT="$RCROOT/$RCJOBDIR/jobs/$RCJOB"
+				if [ -e "$RCJOBSCRIPT" ]
 				then
-					echo "Sourcing $RCJOBDEFPATH/jobdefs/${RCJOB}.defs"
-					source "$RCJOBDEFPATH/jobdefs/${RCJOB}.defs"
+					RCDEFSNAME="$RCJOB"
+					RCCONFIGLINE=$(grep -h "^#RCCONFIG:" "$RCJOBSCRIPT" || :)
+					[ -n "$RCCONFIGLINE" ] && eval ${RCCONFIGLINE#*:}
+					for RCJOBDEFPATH in "$RCROOT/defaultsite" "$RCROOT/sites/common" "$RCROOT/sites/$RCSITE"
+					do
+						if [ -e "$RCJOBDEFPATH/jobdefs/${RCDEFSNAME}.defs" ]
+						then
+							echo "Sourcing $RCJOBDEFPATH/jobdefs/${RCDEFSNAME}.defs"
+							source "$RCJOBDEFPATH/jobdefs/${RCDEFSNAME}.defs"
+						fi
+					done
+					# Quick sanity check on first run: check vars that must be defined in a .defs file
+					RCDEFLINE=$(grep -h "^#RCREQDEFS=" "$RCJOBSCRIPT" || :)
+					[ -n "$RCDEFLINE" ] && eval ${RCDEFLINE#\#}
+					for RCREQUIRE in $RCREQDEFS
+					do
+						if [ -z "${!RCREQUIRE}" ]
+						then
+							RCALLMET="false"
+							errormsg "Required definition $RCREQUIRE not defined"
+						fi
+					done
+					if [ "$RCALLMET" = "false" ]
+					then
+						errorout "Missing definitions must be defined in a .defs file"
+					fi
+					break
 				fi
 			done
+			[ -z "$RCJOBSCRIPT" ] && errorout "Job \"$RCJOB\" not found, maybe it's just a task?"
 		else
 			RCJOBID=$RCARG1
 			[ ! -e "$RCRESUMEDIR/rc-resume-${RCJOBID}.defs" ] && errorout "Couldn't resume $RCJOBID, file not found: \"$RCRESUMEDIR/rc-resume-${RCJOBID}.defs\""
 			source "$RCRESUMEDIR/rc-resume-${RCJOBID}.defs"
 		fi
+		# For a job, a defs file can be pre-populated with job var definitions; these override all but options provided on the CLI
+		[ -e "$RCDEFSFILE" ] && source "$RCDEFSFILE"
 		# shift away rc options and arguments, the rest go to the job
 		shift $((OPTIND))
 		if [ "$1" != "help" -a "$1" != "-h" ]
@@ -239,28 +273,20 @@ case $RCSUBCMD in
 		else
 			RCJOBHELP="help"
 		fi
-		for RCJOBDIR in sites/$RCSITE sites/common defaultsite
-		do
-			RCJOBSCRIPT="$RCROOT/$RCJOBDIR/jobs/$RCJOB"
-			if [ -e "$RCJOBSCRIPT" ]
-			then
-				export RCROOT RCSITE RCJOBID RCJOB RCJOBSCRIPT
-				[ -z "$RCJOBHELP" ] && writeresumefile "$RCJOBSCRIPT"
-				if [ -z "$RCDRYRUN" ]
-				then
-					RCJOBTMP=$(mktemp $RCROOT/scripts/rcjob-XXXXXX.sh)
-					catjob "$RCJOBSCRIPT" $RCJOBHELP > $RCJOBTMP
-					chmod u+x $RCJOBTMP
-					exec $RCJOBTMP
-				else
-					echo "*** DRY RUN ***" >&2
-					catjob "$RCJOBSCRIPT" $RCJOBHELP
-					rm -f "$RCRESUMEDIR/${RCJOBID}.defs"
-				fi
-				exit $?
-			fi
-		done
-		errorout "Job \"$RCJOB\" not found, maybe it's just a task?"
+		export RCROOT RCSITE RCJOBID RCJOB RCJOBSCRIPT
+		[ -z "$RCJOBHELP" ] && writeresumefile "$RCJOBSCRIPT"
+		if [ -z "$RCDRYRUN" ]
+		then
+			RCJOBTMP=$(mktemp $RCROOT/scripts/rcjob-XXXXXX.sh)
+			catjob "$RCJOBSCRIPT" $RCJOBHELP > $RCJOBTMP
+			chmod u+x $RCJOBTMP
+			exec $RCJOBTMP
+		else
+			echo "*** DRY RUN ***" >&2
+			catjob "$RCJOBSCRIPT" $RCJOBHELP
+			rm -f "$RCRESUMEDIR/${RCJOBID}.defs"
+		fi
+		exit $?
 		;;
 	list)
 		[ -z "$RCARG1" ] && errorout "Missing argument to list command"
@@ -317,6 +343,8 @@ case $RCSUBCMD in
 		then
 			gettaskconf $RCTASKNAME
 		fi
+		# For a task, a defs file can override configured vars for a task
+		[ -e "$RCDEFSFILE" ] && source "$RCDEFSFILE"
 		# Resolve remote hosts
 		if [ -n "$RCEXECHOSTS" ]
 		then
@@ -351,10 +379,6 @@ OPTIND=1
 while getopts "$RCOPTS" OPT
 do
 	case $OPT in
-		d)
-			RCDEFSFILE=${OPTARG}
-			[ ! -e "$RCDEFSFILE" ] && errorout "Unable to locate definitions file $RCDEFSFILE"
-			;;
 		E)
 			RCEXCLUDELIBS="$RCEXCLUDELIBS ${OPTARG}"
 			;;

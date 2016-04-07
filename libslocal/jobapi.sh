@@ -8,6 +8,7 @@ parsevarline(){
 	RCVARLINE=$(grep -h "^#$RCVAR:" $RCJOBSCRIPT || :)
 	[ -z "$RCVARLINE" ] && errorout "Variable specification for \"$RCVAR\" not found in $RCJOBSCRIPT, check syntax"
 	[[ $RCVARLINE != *:*:*:* ]] && errorout "Missing fields in definition of \"$RCVAR\" in $RCJOBSCRIPT, check syntax"
+	[[ $RCVARLINE = *:*:*:*:* ]] && errorout "Too many fields in definition of \"$RCVAR\" in $RCJOBSCRIPT, check syntax"
 	RCLINEPART="${RCVARLINE#*:}"
 	RCVARREGEX="${RCLINEPART%%:*}"
 	RCLINEPART="${RCLINEPART#*:}"
@@ -23,29 +24,8 @@ parsevarline(){
 	RCVARDESC="$RCLINEPART"
 }
 
-checkrequireddefs(){
-	local RCALLMET RCDEFLINE RCREQUIRE
-	RCALLMET="true"
-	RCDEFLINE=$(grep -h "^#RCREQDEFS=" "$RCJOBSCRIPT" || :)
-	[ -n "$RCDEFLINE" ] && eval ${RCDEFLINE#\#}
-	# check vars that must be defined in a .defs file
-	for RCREQUIRE in $RCREQDEFS
-	do
-		if [ -z "${!RCREQUIRE}" ]
-		then
-			RCALLMET="false"
-			errormsg "Required definition $RCREQUIRE not defined"
-		fi
-	done
-	if [ "$RCALLMET" = "false" ]
-	then
-		errorout "Missing definitions must be defined in a .defs file"
-	fi
-}
-
 processvars(){
 	local RCREQUIRE RCALLMET RCVARLINE
-	checkrequireddefs
 	RCALLMET="true"
 	# If the depvars function is defined, call it
 	type depvars &>/dev/null && depvars

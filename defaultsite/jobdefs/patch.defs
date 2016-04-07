@@ -16,6 +16,3 @@ The current OS patch level is: $OSVER
 The current kernel is: $KERNELVER
 
 If you find any issues with your server, please contact sysadmin@my.domain.'
-# Defaults that can be overriden with VAR=VALUE arguments
-FORCE="false"
-PRENOTIFY="false"

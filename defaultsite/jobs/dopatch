@@ -1,39 +1,35 @@
 #!/bin/bash -e
 # The dopatch job uses the same defs file as the patch job
 #RCCONFIG:RCDEFSNAME=patch
-# dopatch - scheduled by 'patch' job to do the actual work of patching.
-# Usage: dopatch (-a <adminmail>) "<contact>" <host>
+#RCREQVARS="ADMINMAIL PATCHHOST CONTACT"
+#RCOPTVARS="TEST"
+#RCREQDEFS="POSTPATCHSUBJECT POSTPATCHMESSAGE"
+# Variable specifications for user-supplied (not configured in a .defs file)
+# vars. Format: #VARNAME:<pcre match regex>:(default value):<description>
+#ADMINMAIL:^[a-z_\d\.-]+\@[\da-z\.-]+\.[a-z\.]{2,6}$::From address on notifications, address to send sysadmin reports to
+#CONTACT:^[a-z_\d\.-]+\@[\da-z\.-]+\.[a-z\.]{2,6}$::Contact for the host that receives notifications
+#PATCHHOST:[\da-z\.-]+::The host to be patched
+#TEST:false|true:false:Set "true" to tee logfile to stdout
 
-source ~/.rcconfig
-
-source $RCROOT/libslocal/common.sh
-
-# Use bash getopts built-in for argument parsing
-while getopts ":a:" OPT
-do
-	case $OPT in
-	a)
-		RCADMINMAIL=${OPTARG}
-		;;
-	esac
-done
-
-# Shift away options so that required command arguments are now in $@
-shift $((OPTIND-1))
-
-CONTACT="$1"
-PATCHHOST="$2"
+# Use jobapi to check vars
+processvars
 
 LOG=$(mktemp /tmp/patch-XXXXXX.log)
 cleanup(){
 	if [ -e $LOG ]
 	then
-		mail -r $RCADMINMAIL -s "ERROR from patch script for $PATCHHOST, see log" $RCADMINMAIL < $LOG
+		mail -r $ADMINMAIL -s "ERROR from patch script for $PATCHHOST, see log" $ADMINMAIL < $LOG
 		rm -f $LOG
 	fi
 }
 trap 'cleanup' EXIT
-exec &> $LOG
+
+if [ "$TEST" = "true" ]
+then
+	exec |& tee $LOG
+else
+	exec &> $LOG
+fi
 
 status "Calling yumupdate -r for $PATCHHOST"
 if rcdo yumupdate -r $PATCHHOST
@@ -46,7 +42,7 @@ then
 		rcdo ping $PATCHHOST && break || :
 		if [ $TRY -eq 10 ]
 		then
-			mail -r $RCADMINMAIL -s "FAILED patching of $PATCHHOST, didn't return after reboot" $RCADMINMAIL < $LOG
+			mail -r $ADMINMAIL -s "FAILED patching of $PATCHHOST, didn't return after reboot" $ADMINMAIL < $LOG
 			rm -f $LOG
 			exit 1
 		fi
@@ -55,18 +51,18 @@ then
 	done
 	echo "$PATCHHOST is awake"
 	status "Sending notifications"
-	OSVER=$(rccmd "cat /etc/system-release" $PATCHHOST) || OSVER="error"
-	KERNELVER=$(rccmd "uname -srv" $PATCHHOST) || KERNELVER="error"
+	OSVER=$(rccmd "cat /etc/system-release" $PATCHHOST 2>/dev/null) || OSVER="error"
+	KERNELVER=$(rccmd "uname -srv" $PATCHHOST 2>/dev/null) || KERNELVER="error"
 	eval POSTPATCHSUBJECT=\""$POSTPATCHSUBJECT"\"
 	# Several hoops to jump through to expand things the way we want...
 	eval POSTPATCHMESSAGE=\""$POSTPATCHMESSAGE"\"
-	mail -r $RCADMINMAIL -s "$POSTPATCHSUBJECT" $CONTACT <<<"$POSTPATCHMESSAGE"
+	mail -r $ADMINMAIL -s "$POSTPATCHSUBJECT" $CONTACT <<<"$POSTPATCHMESSAGE"
 	echo "Done"
 	MAILSUBJECT="Patching succeeded for $PATCHHOST"
 	grep -qi 'warning\|error' $LOG && MAILSUBJECT="Warning(s)/Error(s) while patching $PATCHHOST"
-	mail -r $RCADMINMAIL -s "$MAILSUBJECT" $RCADMINMAIL < $LOG
+	mail -r $ADMINMAIL -s "$MAILSUBJECT" $ADMINMAIL < $LOG
 else
 	status "Patch/reboot failed, sending notify to sysadmin"
-	mail -r $RCADMINMAIL -s "FAILED patching on $PATCHHOST" $RCADMINMAIL < $LOG
+	mail -r $ADMINMAIL -s "FAILED patching on $PATCHHOST" $ADMINMAIL < $LOG
 fi
 rm -f $LOG

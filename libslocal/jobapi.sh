@@ -11,6 +11,7 @@ parsevarline(){
 	[[ $RCVARLINE = *:*:*:*:* ]] && errorout "Too many fields in definition of \"$RCVAR\" in $RCJOBSCRIPT, check syntax"
 	RCLINEPART="${RCVARLINE#*:}"
 	RCVARREGEX="${RCLINEPART%%:*}"
+	[ -z "$RCVARREGEX" ] && RCVARREGEX='.*'
 	RCLINEPART="${RCLINEPART#*:}"
 	RCVARDEFAULT="${RCLINEPART%%:*}"
 	if [ -n "$RCVARDEFAULT" ]
@@ -25,13 +26,50 @@ parsevarline(){
 }
 
 processvars(){
-	local RCREQUIRE RCALLMET RCVARLINE
+	local RCREQUIRE RCALLMET RCVARLINE RCNEXTVAR RCANSWERED RVAR RCOPT RCVAL RCDEF
 	RCALLMET="true"
 	if [ "$RCPROMPT" = "true" ]
 	then # prompting workflow
+		RCANSWERED=""
 		while :
 		do
-			[ -z "$RCREQVARS" ] && break
+			# Find a var that needs to be answered, start with optional
+			RCNEXTVAR=""
+			RCOPT="true"
+			for RCVAR in $RCOPTVARS RC_END_OPT $RCREQVARS
+			do
+				[ "$RCVAR" = "RC_END_OPT" ] && { RCOPT="false"; continue; }
+				if ! echo "$RCANSWERED" | grep -q "\<$RCOPTVAR\>"
+				then
+					RCNEXTVAR=$RCVAR
+					break
+				fi
+			done
+			[ -z "$RCNEXTVAR" ] && break # all vars should be set
+			parsevarline $RCVAR
+			RCDEF=""
+			[ -n "${!RCVAR}" ] && RCDEF=" (${!RCVAR})"
+			echo -en "$RCVARDESC\n${RCVAR}${RCDEF}: "
+			read RCVAL
+			if [ -z "$RCVAL" ]
+			then
+				if [ -n "${!RCVAR}" ]
+				then
+					RCANSWERED="$RCANSWERED $RCVAR"
+					continue
+				else
+					echo "$RCVAR can't be blank"
+					continue
+				fi
+			else
+				if echo "$RCVAL" | grep -qP "$RCVARREGEX"
+				then
+					RCANSWERED="$RCANSWERED $RCVAR"
+					continue
+				else
+					echo "\"$RCVAL\" doesn't match regex for $RCVAR" >&2
+				fi
+			fi
 		done
 	else # exit / resume workflow
 		# If the depvars function is defined, call it

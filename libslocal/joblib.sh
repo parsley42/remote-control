@@ -36,6 +36,7 @@ EOF
 	[ -n '$RCREQDEFLINE' ] && eval ${RCREQDEFLINE#\#}
 	RCOPTVARLINE=$(grep -h "^#RCOPTVARS=" "$RCJOBSCRIPT" || :)
 	[ -n '$RCOPTVARLINE' ] && eval ${RCOPTVARLINE#\#}
+	[ -n "$RCOPTVARS" ] && echo "RCOPTVARS=\"$RCOPTVARS\"" >> $RCRESUMEFILE
 	RCRECORDED=""
 	# Now record all required and optional vars
 	for RCVAR in $RCREQVARS $RCOPTVARS

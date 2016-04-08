@@ -27,22 +27,30 @@ parsevarline(){
 processvars(){
 	local RCREQUIRE RCALLMET RCVARLINE
 	RCALLMET="true"
-	# If the depvars function is defined, call it
-	type depvars &>/dev/null && depvars
-	for RCREQUIRE in $RCREQVARS
-	do
-		if [ -z "${!RCREQUIRE}" ]
+	if [ "$RCPROMPT" = "true" ]
+	then # prompting workflow
+		while :
+		do
+			[ -z "$RCREQVARS" ] && break
+		done
+	else # exit / resume workflow
+		# If the depvars function is defined, call it
+		type depvars &>/dev/null && depvars
+		for RCREQUIRE in $RCREQVARS
+		do
+			if [ -z "${!RCREQUIRE}" ]
+			then
+				RCALLMET="false"
+				# All vars were checked in writeresumefile; this can't be blank
+				parsevarline $RCREQUIRE
+				echo "Missing required variable $RCREQUIRE:$RCVARDESC" >&2
+			fi
+		done
+		if [ "$RCALLMET" = "false" ]
 		then
-			RCALLMET="false"
-			# All vars were checked in writeresumefile; this can't be blank
-			parsevarline $RCREQUIRE
-			echo "Missing required variable $RCREQUIRE:$RCVARDESC" >&2
+			echo "Continue job with \"rc resume $RCJOBID (var=value ...)\" to satisfy missing vars"
+			exit 2
 		fi
-	done
-	if [ "$RCALLMET" = "false" ]
-	then
-		echo "Continue job with \"rc resume $RCJOBID (var=value ...)\" to satisfy missing vars"
-		exit 2
 	fi
 }
 

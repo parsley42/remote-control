@@ -52,7 +52,7 @@ RCSCRIPTOPTS=":h"
 RCREQUIREDARGS=0
 
 # Options string for rc
-RCOPTS=":cd:DE:hH:o:s:St"
+RCOPTS=":cd:DE:hH:o:ps:St"
 usage(){
 	cat >&2 <<EOF
 Usage:
@@ -88,7 +88,7 @@ rc do (options) <task> (taskoptions) (taskarguments) (hostspec)
 
 	(options)
 		-c
-			Require confirmation before a job runs
+			(jobs only) Require confirmation before job runs
 		-d <file>
 			Specify a .defs file that is evaluated after any/all
 			configured definitions file (for jobs and tasks)
@@ -102,6 +102,8 @@ rc do (options) <task> (taskoptions) (taskarguments) (hostspec)
 			Don't send remote libraries, e.g. -E errtrap.sh
 		-o <dir>
 			Send output from task to <dir>/<hostname>.out
+		-p
+			(jobs only) prompt user for all vars
 		-s <site>
 			Use <site>
 		-S
@@ -168,6 +170,9 @@ case $OPT in
 			errorout "Directory ${OPTARG} doesn't exist"
 		fi
 		RCOUTPUTDIR=${OPTARG}
+		;;
+	p)
+		RCPROMPT="true"
 		;;
 	s)
 		RCSITE=${OPTARG}

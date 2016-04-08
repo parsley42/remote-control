@@ -129,10 +129,10 @@ taskhelp(){
 }
 
 # rcdo -> rc do, etc.
-[ "$(basename $0)" = "rcdo" ] && set do "$@"
-[ "$(basename $0)" = "rcrun" ] && set run "$@"
-[ "$(basename $0)" = "rclist" ] && set list "$@"
-[ "$(basename $0)" = "rccmd" ] && set cmd "$@"
+[ "$(basename $0)" = "rcdo" ] && set -- do "$@"
+[ "$(basename $0)" = "rcrun" ] && set -- run "$@"
+[ "$(basename $0)" = "rclist" ] && set -- list "$@"
+[ "$(basename $0)" = "rccmd" ] && set -- cmd "$@"
 if [[ $1 != -* ]]
 then
 	RCSUBCMD=$1
@@ -515,7 +515,9 @@ piper(){
 	if [ -n "$RCSUDOPASS" ]
 	then
 		echo "RCSUDOSCRIPTEOF"
-		echo "rm -f $SUDO_ASKPASS"
+		echo "RETVAL=\$?"
+		echo "rm -f \$HOME/$RCASKPASS"
+		echo "exit \$RETVAL"
 	fi
 }
 

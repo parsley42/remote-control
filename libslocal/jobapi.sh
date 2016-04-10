@@ -1,5 +1,61 @@
 # jobapi.sh - API library for job scripts
 
+# writeresumefile writes out a compiled VAR=VALUE file for the job to save
+# state between runs. It also performs syntax checking of the job metadata.
+writeresumefile(){
+	local RCJOBCFGLINE RCJOBSCRIPT RCREQUIRELINE RCVARLINE RCVAR RCRECORDED
+	RCJOBSCRIPT=$1
+	RCRESUMEFILE="$RCRESUMEDIR/rc-resume-${RCJOBID}.defs"
+	cat > "$RCRESUMEFILE" << EOF
+RCJOB=$RCJOB
+RCJOBID=$RCJOBID
+RCJOBSCRIPT=$RCJOBSCRIPT
+RCDEFSNAME=$RCDEFSNAME
+RCPROMPT=$RCPROMPT
+RCREQUIRECONFIRM=$RCREQUIRECONFIRM
+EOF
+	if [ "$RCREQUIRECONFIRM" = "true" ]
+	then
+		# The generated confirmation code
+		echo "RCCONFIRMCODE=$RCCONFIRMCODE" >> "$RCRESUMEFILE"
+		# The user-supplied confirmation code (if it exists)
+		echo "RCCONFIRMED=$RCCONFIRMED" >> "$RCRESUMEFILE"
+	fi
+	if [ -n "$RCREQVARS" ]
+	then
+		echo "RCREQVARS=\"$RCREQVARS\"" >> "$RCRESUMEFILE"
+	else
+		RCREQUIRELINE=$(grep -h "^#RCREQVARS=" "$RCJOBSCRIPT" || :)
+		[ -n "$RCREQUIRELINE" ] && eval ${RCREQUIRELINE#\#}
+		echo "RCREQVARS=\"$RCREQVARS\"" >> "$RCRESUMEFILE"
+	fi
+	RCREQDEFLINE=$(grep -h "^#RCREQDEFS=" "$RCJOBSCRIPT" || :)
+	[ -n '$RCREQDEFLINE' ] && eval ${RCREQDEFLINE#\#}
+	RCOPTVARLINE=$(grep -h "^#RCOPTVARS=" "$RCJOBSCRIPT" || :)
+	[ -n '$RCOPTVARLINE' ] && eval ${RCOPTVARLINE#\#}
+	[ -n "$RCOPTVARS" ] && echo "RCOPTVARS=\"$RCOPTVARS\"" >> $RCRESUMEFILE
+	RCRECORDED=""
+	# Now record all required and optional vars
+	for RCVAR in $RCREQVARS $RCOPTVARS
+	do
+		echo "$RCRECORDED" | grep -q "\<$RCVAR\>" && continue
+		RCRECORDED="$RCRECORDED $RCVAR"
+		parsevarline $RCVAR
+		if [ -n "${!RCVAR}" ]
+		then
+			if ! echo "${!RCVAR}" | grep -qP "$RCVARREGEX"
+			then
+				errormsg "\"${!RCVAR}\" doesn't match regex for $RCVAR: \"$RCVARREGEX\", using default value: \"$RCVARDEFAULT\""
+				echo "$RCVAR=\"$RCVARDEFAULT\"" >> "$RCRESUMEFILE"
+			else
+				echo "$RCVAR=\"${!RCVAR}\"" >> "$RCRESUMEFILE"
+			fi
+		else
+			echo "$RCVAR=\"$RCVARDEFAULT\"" >> "$RCRESUMEFILE"
+		fi
+	done
+}
+
 # parsevarline extracts information about a job variable from the script. This function is duplicated
 # in joblib.sh
 parsevarline(){
@@ -25,51 +81,60 @@ parsevarline(){
 	RCVARDESC="$RCLINEPART"
 }
 
+# processvars is called by the job script to:
+# - check that all required variables are set
+# - prompt for required and optional variables are set
+# - check for confirm code if confirmation is required
+# if procssvars doesn't exit, the job script can continue with all
+# vars set to appropriate values.
 processvars(){
-	local RCREQUIRE RCALLMET RCVARLINE RCNEXTVAR RCANSWERED RVAR RCOPT RCVAL RCDEF
+	local RCREQUIRE RCALLMET RCVARLINE RCNEXTVAR RCANSWERED RVAR RCOPT RCVAL RCDEF RCECHOED
 	RCALLMET="true"
 	if [ "$RCPROMPT" = "true" ]
 	then # prompting workflow
 		RCANSWERED=""
+		RCPROMPT="false"
 		while :
 		do
 			# Find a var that needs to be answered, start with optional
 			RCNEXTVAR=""
-			RCOPT="true"
+			RCOPTIONAL="true"
 			for RCVAR in $RCOPTVARS RC_END_OPT $RCREQVARS
 			do
-				[ "$RCVAR" = "RC_END_OPT" ] && { RCOPT="false"; continue; }
-				if ! echo "$RCANSWERED" | grep -q "\<$RCOPTVAR\>"
+				[ "$RCVAR" = "RC_END_OPT" ] && { RCOPTIONAL="false"; continue; }
+				if ! echo "$RCANSWERED" | grep -q "\<$RCVAR\>"
 				then
 					RCNEXTVAR=$RCVAR
 					break
 				fi
 			done
 			[ -z "$RCNEXTVAR" ] && break # all vars should be set
-			parsevarline $RCVAR
+			parsevarline $RCNEXTVAR
 			RCDEF=""
-			[ -n "${!RCVAR}" ] && RCDEF=" (${!RCVAR})"
-			echo -en "$RCVARDESC\n${RCVAR}${RCDEF}: "
+			[ -n "${!RCNEXTVAR}" ] && RCDEF=" (default:${!RCNEXTVAR})"
+			RCOPT=""
+			[ "$RCOPTIONAL" = "true" ] && RCOPT=" (optional)"
+			echo -en "$RCVARDESC\n${RCNEXTVAR}${RCDEF}${RCOPT}: "
 			read RCVAL
 			if [ -z "$RCVAL" ]
 			then
-				if [ -n "${!RCVAR}" ]
+				if [ -z "${!RCNEXTVAR}" -a "$RCOPTIONAL" = "false" ]
 				then
-					RCANSWERED="$RCANSWERED $RCVAR"
-					continue
+					echo "$RCNEXTVAR can't be blank"
 				else
-					echo "$RCVAR can't be blank"
-					continue
+					RCANSWERED="$RCANSWERED $RCNEXTVAR"
 				fi
 			else
 				if echo "$RCVAL" | grep -qP "$RCVARREGEX"
 				then
-					RCANSWERED="$RCANSWERED $RCVAR"
-					continue
+					RCANSWERED="$RCANSWERED $RCNEXTVAR"
+					$RCNEXTVAR=$RCVAL
 				else
-					echo "\"$RCVAL\" doesn't match regex for $RCVAR" >&2
+					echo "\"$RCVAL\" doesn't match regex for $RCNEXTVAR" >&2
 				fi
 			fi
+			# If the depvars function is defined, call it in case required vars needs to change
+			type depvars &>/dev/null && depvars
 		done
 	else # exit / resume workflow
 		# If the depvars function is defined, call it
@@ -89,6 +154,26 @@ processvars(){
 			echo "Continue job with \"rc resume $RCJOBID (var=value ...)\" to satisfy missing vars"
 			exit 2
 		fi
+	fi
+	# At this point, all required and optional vars for the job have appropriate
+	# values. Next question is, do we require confirmation, and has the
+	# confirmation code been supplied?
+	if [ "$RCREQUIRECONFIRM" = "true" -a "$RCCONFIRMCODE" != "$RCCONFIRMED" ]
+	then
+		# When is this gonna ever happen?
+		[ -n "$RCCONFIRMED" ] && echo "Invalid confirmation code: $RCCONFIRMED"
+		echo "This job requires confirmation, continue with \"rc resume $RCJOBID CONFIRM=$RCCONFIRMCODE\""
+		echo "Currently configured parameters:"
+		RCECHOED=""
+		# Now record all required and optional vars
+		for RCVAR in $RCREQVARS $RCOPTVARS
+		do
+			echo "$RCECHOED" | grep -q "\<$RCVAR\>" && continue
+			RCECHOED="$RCECHOED $RCVAR"
+			parsevarline $RCVAR
+			echo "# $RCVARDESC"
+			echo "$RCVAR=${!RCVAR}"
+		done
 	fi
 }
 

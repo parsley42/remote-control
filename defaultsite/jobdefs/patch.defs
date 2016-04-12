@@ -1,0 +1,18 @@
+# Subject for prepatch notify message
+PREPATCHSUBJECT='Reminder of upcoming patching/reboot of $PATCHHOST'
+# Be sure and stick to the format to get the desired results, including
+# the single tick to prevent variable interpolation during initial read
+# (which are handled later by an eval), and escaping double quotes with a \.
+# Besides $RCADMINMAIL, you can substitute in $PATCHHOST and $PATCHWHEN
+# (when it'll patch).
+PREPATCHMESSAGE=\
+'This is a reminder that $PATCHHOST has been scheduled to have updates applied
+and be rebooted at \"$PATCHWHEN\". If a conflict has arisen and updates need to
+be rescheduled, please email sysadmin@my.domain.'
+POSTPATCHSUBJECT='Patching of $PATCHHOST completed'
+POSTPATCHMESSAGE=\
+'Patching and rebooting of $PATCHHOST has been completed.
+The current OS patch level is: $OSVER
+The current kernel is: $KERNELVER
+
+If you find any issues with your server, please contact sysadmin@my.domain.'

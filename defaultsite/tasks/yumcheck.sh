@@ -16,8 +16,15 @@ EOF
 
 echo -n "*** $(date) - Checking whether updates are needed... "
 
+# turn off error checking, since we expect yum check-update to return an
+# error when updates are needed
+set +e
+trap - ERR
 yum check-update > /dev/null
 RETVAL=$?
+
+errtrap # turn error checking back on
+
 if [ $RETVAL -eq 100 ]
 then
 	echo "system needs updates"
@@ -27,4 +34,6 @@ then
 else
 	echo "error checking for updates"
 fi
+# It's normal for this script to exit non-zero, so don't complain
+trap - EXIT
 exit $RETVAL

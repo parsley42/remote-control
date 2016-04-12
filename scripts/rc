@@ -1,47 +1,47 @@
 #!/bin/bash -e
-# rc - remote control w/ ssh, for general-purpose task automation
+# rc - remote control w/ ssh, for general-purpose task and job automation
 
 RCDIR=$(dirname `readlink -f $0`)
 RCROOT=$(dirname $RCDIR)
 
 RCSSHOPTS="-o ConnectTimeout=5"
 
+# We want RCSITE in environment to supersede a configured value
+[ -n "$RCSITE" ] && RCSAVESITE=$RCSITE
 [ -e ~/.rcconfig ] && source ~/.rcconfig
+[ -n "$RCSAVESITE" ] && RCSITE="$RCSAVESITE"
 
-shopt -s expand_aliases # for functrap
+# Default temporary script dir to $HOME if unconfigured, probably just for
+# bootstrapping (install). Since CentOS7 and presumably other distros
+# harden /tmp and /var/tmp, you can't create executables there.
+RCSCRIPTTMPDIR=${RCSCRIPTTMPDIR:-$HOME}
+RCRESUMEDIR=${RCRESUMEDIR:-/var/tmp}
+
 # Functions for dealing with errors
 . $RCROOT/libslocal/errhandle.sh
+errtrap
 # Functions for resolving supplied hosts
 . $RCROOT/libslocal/hostlib.sh
 # For looking up a task
-. $RCROOT/libslocal/taskinfo.sh
+. $RCROOT/libslocal/tasklib.sh
+# For running/continuing jobs
+. $RCROOT/libslocal/jobapi.sh
+. $RCROOT/libslocal/joblib.sh
 # Other rc functions that may be useful for jobs
 . $RCROOT/libslocal/common.sh
 
 # Try to figure out the site to use
 if [ -z "$RCSITE" ] # environment variable overrides ~/.rcsite
 then
-	if [ -e ~/.rcsite ]
+	# If there's only one site, default to that
+	RCSITECOUNT=$(ls $RCROOT/sites | wc -l)
+	if [ $RCSITECOUNT -eq 1 ]
 	then
-		# ~/.rcsite should contain no more/less than RCSITE=xxx
-		. ~/.rcsite
+		RCSITE=$(ls $RCROOT/sites)
 	else
-		# If there's only one site, default to that
-		RCSITECOUNT=$(ls $RCROOT/sites | wc -l)
-		if [ $RCSITECOUNT -gt 2 ]
-		then
-			errorout "Multiple sites found and RCSITE not set, aborting."
-		elif [ $RCSITECOUNT -eq 1 ]
-		then
-			RCSITE=$(ls $RCROOT/sites)
-		else
-			errorout "At least one site required in $RCROOT/sites"
-		fi
+		RCSITE="FooBarBaz" # This makes other coding a little less painful.
+		# In practice it just means more failed tests in rc's search paths
 	fi
-fi
-if [ ! -d "$RCROOT/sites/$RCSITE" ]
-then
-	errorout "RCSITE ($RCSITE) refers to non-existent directory ($RCROOT/sites/$RCSITE)"
 fi
 
 # Default options - override rc.tasks
@@ -52,7 +52,7 @@ RCSCRIPTOPTS=":h"
 RCREQUIREDARGS=0
 
 # Options string for rc
-RCOPTS=":d:DE:hH:o:s:St"
+RCOPTS=":cd:DE:hH:o:ps:St"
 usage(){
 	cat >&2 <<EOF
 Usage:
@@ -73,8 +73,10 @@ rc list jobs (site)
 rc cmd (options) "<command>" (hostspec)
 	Run a single command
 
-rc run (options) <job> (joboptions) (jobargs)
-	Wrapper for exec'ing jobs/<job>
+rc resume <jobid> ("var=value" ...)
+
+rc run (options) <job> (help | "var=value" ...)
+	Run a job with the given variables (which may override defaults)
 
 rc do (options) <task> (taskoptions) (taskarguments) (hostspec)
 	<task> is the name of the task to be run, e.g. 'whois'
@@ -84,13 +86,14 @@ rc do (options) <task> (taskoptions) (taskarguments) (hostspec)
 		a space-separated combination of hosts, aliases and hostgroups
 		enclosed in quotes.
 
-	(options) are options to rc which may override defaults from
-	tasks.conf files
+	(options)
+		-c
+			(jobs only) Require confirmation before job runs
 		-d <file>
-			use <file> for the task .defs (variable definitions) file, possibly
-			overriding a default
+			Specify a .defs file that is evaluated after any/all
+			configured definitions file (for jobs and tasks)
 		-D
-			dry-run, echo the output to be sent but don't send
+			dry-run, echo the output to be sent but don't send (tasks)
 		-h (task)
 			print this help message or task help
 		-H <host> | "<host> <host> ..." | @HOSTGROUP
@@ -99,12 +102,14 @@ rc do (options) <task> (taskoptions) (taskarguments) (hostspec)
 			Don't send remote libraries, e.g. -E errtrap.sh
 		-o <dir>
 			Send output from task to <dir>/<hostname>.out
+		-p
+			(jobs only) prompt user for all vars
 		-s <site>
 			Use <site>
 		-S
 			Run multiple hosts in serial (default parallel)
 		-t
-			Set trace debugging during remote execution
+			Set trace debugging during task/job execution
 	(taskoptions)
 		'-h' will give usage for the task
 	(arguments) are any arguments required by the task
@@ -126,10 +131,10 @@ taskhelp(){
 }
 
 # rcdo -> rc do, etc.
-[ "$(basename $0)" = "rcdo" ] && set do "$@"
-[ "$(basename $0)" = "rcrun" ] && set run "$@"
-[ "$(basename $0)" = "rclist" ] && set list "$@"
-[ "$(basename $0)" = "rccmd" ] && set cmd "$@"
+[ "$(basename $0)" = "rcdo" ] && set -- do "$@"
+[ "$(basename $0)" = "rcrun" ] && set -- run "$@"
+[ "$(basename $0)" = "rclist" ] && set -- list "$@"
+[ "$(basename $0)" = "rccmd" ] && set -- cmd "$@"
 if [[ $1 != -* ]]
 then
 	RCSUBCMD=$1
@@ -140,6 +145,9 @@ fi
 while getopts "$RCOPTS" OPT
 do
 case $OPT in
+	c)
+		RCREQUIRECONFIRM="true"
+		;;
 	h)
 		shift $((OPTIND - 1))
 		if [ -n "$1" ]
@@ -148,6 +156,10 @@ case $OPT in
 		else
 			usage
 		fi
+		;;
+	d)
+		RCDEFSFILE=${OPTARG}
+		[ ! -e "$RCDEFSFILE" ] && errorout "Unable to locate definitions file $RCDEFSFILE"
 		;;
 	D)
 		RCDRYRUN=true
@@ -158,6 +170,9 @@ case $OPT in
 			errorout "Directory ${OPTARG} doesn't exist"
 		fi
 		RCOUTPUTDIR=${OPTARG}
+		;;
+	p)
+		RCPROMPT="true"
 		;;
 	s)
 		RCSITE=${OPTARG}
@@ -201,18 +216,88 @@ case $RCSUBCMD in
 		[ -n "$RCEXECHOSTS" ] || errorout "Unable to resolve any hosts from \"$RCARG2\""
 		RCSHIFT=2
 		;;
-	run)
-		RCJOB=$RCARG1
+	run|resume)
+		if [ "$RCSUBCMD" = "run" ]
+		then
+			RCJOB=$RCARG1
+			RCJOBID=$(generateid)
+			# Read in configured default values on first run
+			# Note that .rcconfig has already been sourced, message here is for informational purposes
+			[ -e ~/.rcconfig ] && echo "Sourcing ~/.rcconfig"
+			# Locate the job script
+			for RCJOBDIR in sites/$RCSITE sites/common defaultsite
+			do
+				RCJOBSCRIPT="$RCROOT/$RCJOBDIR/jobs/$RCJOB"
+				if [ -e "$RCJOBSCRIPT" ]
+				then
+					RCDEFSNAME="$RCJOB"
+					RCCONFIGLINE=$(grep -h "^#RCCONFIG:" "$RCJOBSCRIPT" || :)
+					[ -n "$RCCONFIGLINE" ] && eval ${RCCONFIGLINE#*:}
+					[ "$RCREQUIRECONFIRM" = "true" -a -z "$RCCONFIRMCODE" ] && RCCONFIRMCODE=$(generateid)
+					for RCJOBDEFPATH in "$RCROOT/defaultsite" "$RCROOT/sites/common" "$RCROOT/sites/$RCSITE"
+					do
+						if [ -e "$RCJOBDEFPATH/jobdefs/${RCDEFSNAME}.defs" ]
+						then
+							echo "Sourcing $RCJOBDEFPATH/jobdefs/${RCDEFSNAME}.defs"
+							source "$RCJOBDEFPATH/jobdefs/${RCDEFSNAME}.defs"
+						fi
+					done
+					# Quick sanity check on first run: check vars that must be defined in a .defs file
+					RCDEFLINE=$(grep -h "^#RCREQDEFS=" "$RCJOBSCRIPT" || :)
+					[ -n "$RCDEFLINE" ] && eval ${RCDEFLINE#\#}
+					for RCREQUIRE in $RCREQDEFS
+					do
+						if [ -z "${!RCREQUIRE}" ]
+						then
+							RCALLMET="false"
+							errormsg "Required definition $RCREQUIRE not defined"
+						fi
+					done
+					if [ "$RCALLMET" = "false" ]
+					then
+						errorout "Missing definitions must be defined in a .defs file"
+					fi
+					break
+				fi
+			done
+			[ -z "$RCJOBSCRIPT" ] && errorout "Job \"$RCJOB\" not found, maybe it's just a task?"
+		else
+			RCJOBID=$RCARG1
+			[ ! -e "$RCRESUMEDIR/rc-resume-${RCJOBID}.defs" ] && errorout "Couldn't resume $RCJOBID, file not found: \"$RCRESUMEDIR/rc-resume-${RCJOBID}.defs\""
+			source "$RCRESUMEDIR/rc-resume-${RCJOBID}.defs"
+		fi
+		# For a job, a defs file can be pre-populated with job var definitions; these override all but options provided on the CLI
+		[ -e "$RCDEFSFILE" ] && source "$RCDEFSFILE"
 		# shift away rc options and arguments, the rest go to the job
 		shift $((OPTIND))
-		export RCROOT # jobs may need to know this, for e.g. including libslocal/(lib).sh
-		export RCSITE # make sure jobs run in the correct site
-		for RCJOBDIR in sites/$RCSITE sites/common defaultsite
-		do
-			RCJOBSCRIPT="$RCROOT/$RCJOBDIR/jobs/$RCJOB"
-			[ -e "$RCJOBSCRIPT" ] && exec $RCJOBSCRIPT "$@" || :
-		done
-		errorout "Job \"$RCJOB\" not found, maybe it's just a task?"
+		if [ "$1" != "help" -a "$1" != "-h" ]
+		then
+			RCUPDATED=false
+			for RCJOBVAR in "$@"
+			do
+				[[ $RCJOBVAR = CONFIRM=* ]] && { RCCONFIRMED=${RCARG2#*=}; continue; }
+				RCUPDATED=true
+				eval "$RCJOBVAR"
+			done
+			# If the job is modified, it requires confirmation again
+			[ "$RCUPDATED" = "true" -a -n "$RCCONFIRMED" ] && unset RCCONFIRMED
+		else
+			RCJOBHELP="help"
+		fi
+		export RCROOT RCSITE RCJOBID RCJOB RCJOBSCRIPT
+		[ -z "$RCJOBHELP" ] && writeresumefile "$RCJOBSCRIPT"
+		if [ -z "$RCDRYRUN" ]
+		then
+			RCJOBTMP=$(mktemp $RCSCRIPTTMPDIR/rcjob-XXXXXX.sh)
+			catjob "$RCJOBSCRIPT" $RCJOBHELP > $RCJOBTMP
+			chmod u+x $RCJOBTMP
+			exec $RCJOBTMP
+		else
+			echo "*** DRY RUN ***" >&2
+			catjob "$RCJOBSCRIPT" $RCJOBHELP
+			rm -f "$RCRESUMEDIR/${RCJOBID}.defs"
+		fi
+		exit $?
 		;;
 	list)
 		[ -z "$RCARG1" ] && errorout "Missing argument to list command"
@@ -269,6 +354,8 @@ case $RCSUBCMD in
 		then
 			gettaskconf $RCTASKNAME
 		fi
+		# For a task, a defs file can override configured vars for a task
+		[ -e "$RCDEFSFILE" ] && source "$RCDEFSFILE"
 		# Resolve remote hosts
 		if [ -n "$RCEXECHOSTS" ]
 		then
@@ -303,10 +390,6 @@ OPTIND=1
 while getopts "$RCOPTS" OPT
 do
 	case $OPT in
-		d)
-			RCDEFSFILE=${OPTARG}
-			[ ! -e "$RCDEFSFILE" ] && errorout "Unable to locate definitions file $RCDEFSFILE"
-			;;
 		E)
 			RCEXCLUDELIBS="$RCEXCLUDELIBS ${OPTARG}"
 			;;
@@ -418,7 +501,7 @@ piper(){
 		esac
 	fi
 	echo "set -e"
-	RCTASKID=$(dd if=/dev/urandom bs=16 count=1 2>/dev/null | md5sum | cut -f 1 -d' ')
+	RCTASKID=$(generateid)
 	[ -n "$RCTRACE" ] && echo "set -x"
 	# Set the task ID
 	echo "RCTASKID=$RCTASKID"
@@ -443,7 +526,9 @@ piper(){
 	if [ -n "$RCSUDOPASS" ]
 	then
 		echo "RCSUDOSCRIPTEOF"
-		echo "rm -f $SUDO_ASKPASS"
+		echo "RETVAL=\$?"
+		echo "rm -f \$HOME/$RCASKPASS"
+		echo "exit \$RETVAL"
 	fi
 }
 

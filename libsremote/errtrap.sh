@@ -13,3 +13,9 @@ catch_exit(){
     fi
 }
 trap 'catch_exit $?' EXIT
+
+errtrap(){
+	set -e
+	trap 'error_handler "${BASH_COMMAND}" $((LINENO - RCFIRSTLINE)) $?' ERR
+	trap 'catch_exit $?' EXIT
+}

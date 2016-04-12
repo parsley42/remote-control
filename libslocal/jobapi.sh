@@ -153,6 +153,7 @@ processvars(){
 		if [ "$RCALLMET" = "false" ]
 		then
 			echo "Continue job with \"rc resume $RCJOBID (var=value ...)\" to satisfy missing vars"
+			# exit value 2 -> more params required
 			exit 2
 		fi
 	fi
@@ -175,7 +176,8 @@ processvars(){
 			echo "# $RCVARDESC"
 			echo "$RCVAR=${!RCVAR}"
 		done
-		exit 2
+		# exit value 3 -> confirmation required
+		exit 3
 	else
 		echo "Running job $RCJOBID, modify and re-run with \"rc resume $RCJOBID (var=value ...)\""
 	fi

@@ -147,7 +147,6 @@ do
 case $OPT in
 	c)
 		RCREQUIRECONFIRM="true"
-		RCCONFIRMCODE=$(generateid)
 		;;
 	h)
 		shift $((OPTIND - 1))
@@ -234,6 +233,7 @@ case $RCSUBCMD in
 					RCDEFSNAME="$RCJOB"
 					RCCONFIGLINE=$(grep -h "^#RCCONFIG:" "$RCJOBSCRIPT" || :)
 					[ -n "$RCCONFIGLINE" ] && eval ${RCCONFIGLINE#*:}
+					[ "$RCREQUIRECONFIRM" = "true" -a -z "$RCCONFIRMCODE" ] && RCCONFIRMCODE=$(generateid)
 					for RCJOBDEFPATH in "$RCROOT/defaultsite" "$RCROOT/sites/common" "$RCROOT/sites/$RCSITE"
 					do
 						if [ -e "$RCJOBDEFPATH/jobdefs/${RCDEFSNAME}.defs" ]
@@ -263,7 +263,6 @@ case $RCSUBCMD in
 			[ -z "$RCJOBSCRIPT" ] && errorout "Job \"$RCJOB\" not found, maybe it's just a task?"
 		else
 			RCJOBID=$RCARG1
-			[[ $RCARG2 = CONFIRM=* ]] && RCCONFIRMED=${RCARG2#*=}
 			[ ! -e "$RCRESUMEDIR/rc-resume-${RCJOBID}.defs" ] && errorout "Couldn't resume $RCJOBID, file not found: \"$RCRESUMEDIR/rc-resume-${RCJOBID}.defs\""
 			source "$RCRESUMEDIR/rc-resume-${RCJOBID}.defs"
 		fi
@@ -273,10 +272,15 @@ case $RCSUBCMD in
 		shift $((OPTIND))
 		if [ "$1" != "help" -a "$1" != "-h" ]
 		then
+			RCUPDATED=false
 			for RCJOBVAR in "$@"
 			do
+				[[ $RCJOBVAR = CONFIRM=* ]] && { RCCONFIRMED=${RCARG2#*=}; continue; }
+				RCUPDATED=true
 				eval "$RCJOBVAR"
 			done
+			# If the job is modified, it requires confirmation again
+			[ "$RCUPDATED" = "true" -a -n "$RCCONFIRMED" ] && unset RCCONFIRMED
 		else
 			RCJOBHELP="help"
 		fi

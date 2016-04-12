@@ -128,14 +128,15 @@ processvars(){
 				if echo "$RCVAL" | grep -qP "$RCVARREGEX"
 				then
 					RCANSWERED="$RCANSWERED $RCNEXTVAR"
-					$RCNEXTVAR=$RCVAL
+					eval $RCNEXTVAR=$RCVAL
 				else
-					echo "\"$RCVAL\" doesn't match regex for $RCNEXTVAR" >&2
+					echo "\"$RCVAL\" doesn't match regex for $RCNEXTVAR: $RCVARREGEX" >&2
 				fi
 			fi
 			# If the depvars function is defined, call it in case required vars needs to change
 			type depvars &>/dev/null && depvars
 		done
+		writeresumefile $RCJOBSCRIPT
 	else # exit / resume workflow
 		# If the depvars function is defined, call it
 		type depvars &>/dev/null && depvars
@@ -162,7 +163,7 @@ processvars(){
 	then
 		# When is this gonna ever happen?
 		[ -n "$RCCONFIRMED" ] && echo "Invalid confirmation code: $RCCONFIRMED"
-		echo "This job requires confirmation, continue with \"rc resume $RCJOBID CONFIRM=$RCCONFIRMCODE\""
+		echo -e "\n*** THIS JOB REQUIRES CONFIRMATION, continue with \"rc resume $RCJOBID CONFIRM=$RCCONFIRMCODE\""
 		echo "Currently configured parameters:"
 		RCECHOED=""
 		# Now record all required and optional vars
@@ -174,6 +175,9 @@ processvars(){
 			echo "# $RCVARDESC"
 			echo "$RCVAR=${!RCVAR}"
 		done
+		exit 2
+	else
+		echo "Running job $RCJOBID, modify and re-run with \"rc resume $RCJOBID (var=value ...)\""
 	fi
 }
 

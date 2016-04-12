@@ -4,7 +4,7 @@
 # *** remote-control metadata, parsed by rc
 # Job configuration - the patch job will ask for confirmation before
 # running.
-#RCCONFIG:RCCONFIRM="true"
+#RCCONFIG:RCREQUIRECONFIRM="true";RCPROMPT="true"
 # Initially required vars that must be set for the job to run.
 # These may be modified by the depvars function.
 #RCREQVARS="PATCHWHEN CONTACT PATCHHOST PRENOTIFY"
@@ -19,7 +19,7 @@
 # vars. Format: #VARNAME:<pcre match regex>:(default value):<description>
 # Note that ':' is illegal in the description (for syntax checking)
 #ADMINMAIL:^[a-z_\d\.-]+\@[\da-z\.-]+\.[a-z\.]{2,6}$::From address on notifications, address to send sysadmin reports to
-#FORCE:false|true:false:Patch host even when not required when set "true"
+#FORCE:false|true:false:Patch host even when not required if set to "true"
 #PRENOTIFY:false|true:false:Send notification before patching when set "true"
 #NOTIFYWHEN:.*::When to send notification ('at' timespec)
 #PATCHWHEN:.*::When to patch the host ('at' timespec)
@@ -48,7 +48,7 @@ fi
 # Depvars should handle dependencies between variables and error checking
 # of values
 depvars(){
-	if [ '$PRENOTIFY' = "true" ]
+	if [ "$PRENOTIFY" = "true" ]
 	then
 		addrequired NOTIFYWHEN
 	else
@@ -96,7 +96,7 @@ fi
 # schedule the at job.
 if [ "$PRENOTIFY" = "true" ]
 then
-	status "Pre-notification requesting, setting up automated email for \"$NOTIFYWHEN\""
+	status "Pre-notification requested, setting up automated email for \"$NOTIFYWHEN\""
 	eval PREPATCHSUBJECT=\""$PREPATCHSUBJECT"\"
 	eval PREPATCHMESSAGE=\""$PREPATCHMESSAGE"\"
 	NOTIFYJOB=$(cat <<EOF

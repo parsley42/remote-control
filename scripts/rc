@@ -260,7 +260,7 @@ case $RCSUBCMD in
 					break
 				fi
 			done
-			[ -z "$RCJOBSCRIPT" ] && errorout "Job \"$RCJOB\" not found, maybe it's just a task?"
+			[ ! -e "$RCJOBSCRIPT" ] && errorout "Job \"$RCJOB\" not found, maybe it's just a task?"
 		else
 			RCJOBID=$RCARG1
 			[ ! -e "$RCRESUMEDIR/rc-resume-${RCJOBID}.defs" ] && errorout "Couldn't resume $RCJOBID, file not found: \"$RCRESUMEDIR/rc-resume-${RCJOBID}.defs\""
@@ -278,6 +278,8 @@ case $RCSUBCMD in
 				[[ $RCJOBVAR = CONFIRM=* ]] && { RCCONFIRMED=${RCARG2#*=}; continue; }
 				RCUPDATED=true
 				eval "$RCJOBVAR"
+				# record that the user provided this var
+				addprovided ${RCJOBVAR%=*}
 			done
 			# If the job is modified, it requires confirmation again
 			[ "$RCUPDATED" = "true" -a -n "$RCCONFIRMED" ] && unset RCCONFIRMED

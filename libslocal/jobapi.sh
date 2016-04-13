@@ -47,6 +47,7 @@ EOF
 			then
 				errormsg "\"${!RCVAR}\" doesn't match regex for $RCVAR: \"$RCVARREGEX\", using default value: \"$RCVARDEFAULT\""
 				echo "$RCVAR=\"$RCVARDEFAULT\"" >> "$RCRESUMEFILE"
+				removeprovided $RCVAR
 			else
 				echo "$RCVAR=\"${!RCVAR}\"" >> "$RCRESUMEFILE"
 			fi
@@ -54,6 +55,8 @@ EOF
 			echo "$RCVAR=\"$RCVARDEFAULT\"" >> "$RCRESUMEFILE"
 		fi
 	done
+	# Record the list of parameters the user has provided
+	echo "RCPROVIDED=\"$RCPROVIDED\"" >> "$RCRESUMEFILE"
 }
 
 # parsevarline extracts information about a job variable from the script. This function is duplicated
@@ -142,16 +145,23 @@ processvars(){
 		type depvars &>/dev/null && depvars
 		for RCREQUIRE in $RCREQVARS
 		do
-			if [ -z "${!RCREQUIRE}" ]
+			if ! echo " $RCPROVIDED " | grep -q " $RCREQUIRE "
 			then
 				RCALLMET="false"
 				# All vars were checked in writeresumefile; this can't be blank
 				parsevarline $RCREQUIRE
-				echo "Missing required variable $RCREQUIRE:$RCVARDESC" >&2
+				echo "Missing: $RCREQUIRE:$RCVARDESC"
 			fi
 		done
 		if [ "$RCALLMET" = "false" ]
 		then
+			for RCVAR in $RCOPTVARS
+			do
+				parsevarline $RCVAR
+				echo "Optional: $RCVAR:$RCVARDESC"
+			done
+			echo "Provided: $RCPROVIDED"
+			echo "JOBID: $RCJOBID"
 			echo "Continue job with \"rc resume $RCJOBID (var=value ...)\" to satisfy missing vars"
 			# exit value 2 -> more params required
 			exit 2
@@ -165,6 +175,7 @@ processvars(){
 		# When is this gonna ever happen?
 		[ -n "$RCCONFIRMED" ] && echo "Invalid confirmation code: $RCCONFIRMED"
 		echo -e "\n*** THIS JOB REQUIRES CONFIRMATION, continue with \"rc resume $RCJOBID CONFIRM=$RCCONFIRMCODE\""
+		echo "Confirm: $RCCONFIRMCODE"
 		echo "Currently configured parameters:"
 		RCECHOED=""
 		# Now record all required and optional vars
@@ -203,4 +214,26 @@ removerequired(){
 	done
 	RCREQVARS=${RCNEWREQS# }
 	RCREQVARS=${RCREQVARS% }
+}
+
+addprovided(){
+	local RCPROVIDE
+	for RCPROVIDE in $*
+	do
+		echo " $RCPROVIDED " | grep -q " $RCPROVIDE " || RCPROVIDED="$RCPROVIDED $RCPROVIDE"
+	done
+	RCPROVIDED=${RCPROVIDED# }
+	RCPROVIDED=${RCPROVIDED% }
+}
+
+removeprovided(){
+	local RCNEWREQS=""
+	local REMOVE="$*"
+	local RCPROVIDE
+	for RCPROVIDE in $RCPROVIDED
+	do
+		echo " $REMOVE " | grep -q " $RCPROVIDE " || RCNEWREQS="$RCNEWREQS $RCPROVIDE"
+	done
+	RCPROVIDED=${RCNEWREQS# }
+	RCPROVIDED=${RCPROVIDED% }
 }

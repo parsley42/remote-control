@@ -4,7 +4,7 @@
 # *** remote-control metadata, parsed by rc
 # Job configuration - the patch job will ask for confirmation before
 # running.
-#RCCONFIG:RCREQUIRECONFIRM="true";RCPROMPT="true"
+#RCCONFIG:RCREQUIRECONFIRM="true"
 # Initially required vars that must be set for the job to run.
 # These may be modified by the depvars function.
 #RCREQVARS="PATCHWHEN CONTACT PATCHHOST PRENOTIFY"

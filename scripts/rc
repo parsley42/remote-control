@@ -219,6 +219,7 @@ case $RCSUBCMD in
 	run|resume)
 		if [ "$RCSUBCMD" = "run" ]
 		then
+			[ -z "$RCARG1" ] && errorout "Missing job name"
 			RCJOB=$RCARG1
 			RCJOBID=$(generateid)
 			# Read in configured default values on first run
@@ -262,6 +263,7 @@ case $RCSUBCMD in
 			done
 			[ ! -e "$RCJOBSCRIPT" ] && errorout "Job \"$RCJOB\" not found, maybe it's just a task?"
 		else
+			[ -z "$RCARG1" ] && errorout "Missing job id"
 			RCJOBID=$RCARG1
 			[ ! -e "$RCRESUMEDIR/rc-resume-${RCJOBID}.defs" ] && errorout "Couldn't resume $RCJOBID, file not found: \"$RCRESUMEDIR/rc-resume-${RCJOBID}.defs\""
 			source "$RCRESUMEDIR/rc-resume-${RCJOBID}.defs"

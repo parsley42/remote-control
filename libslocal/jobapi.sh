@@ -30,32 +30,30 @@ EOF
 	fi
 	RCREQDEFLINE=$(grep -h "^#RCREQDEFS=" "$RCJOBSCRIPT" || :)
 	[ -n '$RCREQDEFLINE' ] && eval ${RCREQDEFLINE#\#}
+	RCDEPVARLINE=$(grep -h "^#RCDEPVARS=" "$RCJOBSCRIPT" || :)
+	[ -n '$RCDEPVARLINE' ] && eval ${RCDEPVARLINE#\#}
+	[ -n "$RCDEPVARS" ] && echo "RCDEPVARS=\"$RCDEPVARS\"" >> $RCRESUMEFILE
 	RCOPTVARLINE=$(grep -h "^#RCOPTVARS=" "$RCJOBSCRIPT" || :)
 	[ -n '$RCOPTVARLINE' ] && eval ${RCOPTVARLINE#\#}
 	[ -n "$RCOPTVARS" ] && echo "RCOPTVARS=\"$RCOPTVARS\"" >> $RCRESUMEFILE
 	RCRECORDED=""
 	# Now record all required and optional vars
-	for RCVAR in $RCREQVARS $RCOPTVARS
+	for RCVAR in $RCREQVARS $RCOPTVARS $RCDEPVARS
 	do
 		echo "$RCRECORDED" | grep -q "\<$RCVAR\>" && continue
 		RCRECORDED="$RCRECORDED $RCVAR"
 		parsevarline $RCVAR
-		if [ -n "${!RCVAR}" ]
+		# Test if the variable has been set to anything, even ""
+		if [ ! "${!RCVAR+UNSET}" = "" ]
 		then
 			if ! echo "${!RCVAR}" | grep -qP "$RCVARREGEX"
 			then
-				errormsg "\"${!RCVAR}\" doesn't match regex for $RCVAR: \"$RCVARREGEX\", using default value: \"$RCVARDEFAULT\""
-				echo "$RCVAR=\"$RCVARDEFAULT\"" >> "$RCRESUMEFILE"
-				removeprovided $RCVAR
+				errormsg "\"${!RCVAR}\" doesn't match regex for $RCVAR: \"$RCVARREGEX\""
 			else
 				echo "$RCVAR=\"${!RCVAR}\"" >> "$RCRESUMEFILE"
 			fi
-		else
-			echo "$RCVAR=\"$RCVARDEFAULT\"" >> "$RCRESUMEFILE"
 		fi
 	done
-	# Record the list of parameters the user has provided
-	echo "RCPROVIDED=\"$RCPROVIDED\"" >> "$RCRESUMEFILE"
 }
 
 # parsevarline extracts information about a job variable from the script. This function is duplicated
@@ -112,19 +110,33 @@ processvars(){
 			done
 			[ -z "$RCNEXTVAR" ] && break # all vars should be set
 			parsevarline $RCNEXTVAR
-			RCDEF=""
-			[ -n "${!RCNEXTVAR}" ] && RCDEF=" (default:${!RCNEXTVAR})"
+			unset RCDEFVAL RCDEF
+			if [ -n "${!RCNEXTVAR}" ]
+			then
+				RCDEFVAL=${!RCNEXTVAR}
+				RCDEF=" (default:${RCDEFVAL})"
+			elif [ -n "$RCVARDEFAULT" ]
+			then
+				RCDEFVAL=$RCVARDEFAULT
+				RCDEF=" (default:${RCDEFVAL})"
+			fi
 			RCOPT=""
 			[ "$RCOPTIONAL" = "true" ] && RCOPT=" (optional)"
 			echo -en "$RCVARDESC\n${RCNEXTVAR}${RCDEF}${RCOPT}: "
 			read RCVAL
 			if [ -z "$RCVAL" ]
 			then
-				if [ -z "${!RCNEXTVAR}" -a "$RCOPTIONAL" = "false" ]
+				if [ -z "$RCDEFVAL" ]
 				then
-					echo "$RCNEXTVAR can't be blank"
+					if [ "$RCOPTIONAL" = "false" ]
+					then
+						echo "$RCNEXTVAR can't be blank"
+					else
+						RCANSWERED="$RCANSWERED $RCNEXTVAR"
+					fi
 				else
 					RCANSWERED="$RCANSWERED $RCNEXTVAR"
+					eval $RCNEXTVAR=\"$RCDEFVAL\"
 				fi
 			else
 				if echo "$RCVAL" | grep -qP "$RCVARREGEX"
@@ -138,16 +150,14 @@ processvars(){
 			# If the depvars function is defined, call it in case required vars needs to change
 			type depvars &>/dev/null && depvars
 		done
-		RCANSWERED="${RCANSWERED# }"
-		RCANSWERED="${RCANSWERED% }"
-		RCPROVIDED="$RCANSWERED"
 		writeresumefile
 	else # exit / resume workflow
 		# If the depvars function is defined, call it
 		type depvars &>/dev/null && depvars
 		for RCREQUIRE in $RCREQVARS
 		do
-			if [  ]
+			# Test if the required variable has been set to anything, even ""
+			if [ "${!RCREQUIRE+UNSET}" = "" ]
 			then
 				RCALLMET="false"
 				# All vars were checked in writeresumefile; this can't be blank
@@ -163,7 +173,6 @@ processvars(){
 				parsevarline $RCVAR
 				echo "Optional: $RCVAR:$RCVARDESC"
 			done
-			echo "Provided: $RCPROVIDED"
 			echo "JOBID: $RCJOBID"
 			echo "Continue job with \"rc resume $RCJOBID (var=value ...)\" to satisfy missing vars"
 			# exit value 2 -> more params required
@@ -182,13 +191,18 @@ processvars(){
 		echo "Currently configured parameters:"
 		RCECHOED=""
 		# Now record all required and optional vars
-		for RCVAR in $RCREQVARS $RCOPTVARS
+		RCOPTIONAL="false"
+		for RCVAR in $RCREQVARS RC_START_OPT $RCOPTVARS
 		do
+			[ "$RCVAR" = "RC_START_OPT" ] && { RCOPTIONAL="true"; continue; }
 			echo "$RCECHOED" | grep -q "\<$RCVAR\>" && continue
 			RCECHOED="$RCECHOED $RCVAR"
 			parsevarline $RCVAR
-			echo "# $RCVARDESC"
-			echo "$RCVAR=${!RCVAR}"
+			if [ -n "${!RCVAR}" -o "$RCOPTIONAL" != "true" ]
+			then
+				echo "# $RCVARDESC"
+				echo "$RCVAR=${!RCVAR}"
+			fi
 		done
 		writeresumefile
 		# exit value 3 -> confirmation required
@@ -218,26 +232,4 @@ removerequired(){
 	done
 	RCREQVARS=${RCNEWREQS# }
 	RCREQVARS=${RCREQVARS% }
-}
-
-addprovided(){
-	local RCPROVIDE
-	for RCPROVIDE in $*
-	do
-		echo " $RCPROVIDED " | grep -q " $RCPROVIDE " || RCPROVIDED="$RCPROVIDED $RCPROVIDE"
-	done
-	RCPROVIDED=${RCPROVIDED# }
-	RCPROVIDED=${RCPROVIDED% }
-}
-
-removeprovided(){
-	local RCNEWREQS=""
-	local REMOVE="$*"
-	local RCPROVIDE
-	for RCPROVIDE in $RCPROVIDED
-	do
-		echo " $REMOVE " | grep -q " $RCPROVIDE " || RCNEWREQS="$RCNEWREQS $RCPROVIDE"
-	done
-	RCPROVIDED=${RCNEWREQS# }
-	RCPROVIDED=${RCPROVIDED% }
 }

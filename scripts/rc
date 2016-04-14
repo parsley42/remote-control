@@ -278,8 +278,6 @@ case $RCSUBCMD in
 				[[ $RCJOBVAR = CONFIRM=* ]] && { RCCONFIRMED=${RCARG2#*=}; continue; }
 				RCUPDATED=true
 				eval ${RCJOBVAR%=*}=\"${RCJOBVAR#*=}\"
-				# record that the user provided this var
-				addprovided ${RCJOBVAR%=*}
 			done
 			# If the job is modified, it requires confirmation again
 			[ "$RCUPDATED" = "true" -a -n "$RCCONFIRMED" ] && unset RCCONFIRMED

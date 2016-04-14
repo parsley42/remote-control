@@ -12,7 +12,9 @@ be rescheduled, please email sysadmin@my.domain.'
 POSTPATCHSUBJECT='Patching of $PATCHHOST completed'
 POSTPATCHMESSAGE=\
 'Patching and rebooting of $PATCHHOST has been completed.
-The current OS patch level is: $OSVER
-The current kernel is: $KERNELVER
+Previous OS patch level was: $OLDOSVER
+Current OS patch level is: $OSVER
+Previous kernel version was: $OLDKERNELVER
+Current kernel version is: $KERNELVER
 
 If you find any issues with your server, please contact sysadmin@my.domain.'

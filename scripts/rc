@@ -277,7 +277,7 @@ case $RCSUBCMD in
 			do
 				[[ $RCJOBVAR = CONFIRM=* ]] && { RCCONFIRMED=${RCARG2#*=}; continue; }
 				RCUPDATED=true
-				eval "$RCJOBVAR"
+				eval ${RCJOBVAR%=*}=\"${RCJOBVAR#*=}\"
 				# record that the user provided this var
 				addprovided ${RCJOBVAR%=*}
 			done
@@ -287,7 +287,7 @@ case $RCSUBCMD in
 			RCJOBHELP="help"
 		fi
 		export RCROOT RCSITE RCJOBID RCJOB RCJOBSCRIPT
-		[ -z "$RCJOBHELP" ] && writeresumefile "$RCJOBSCRIPT"
+		[ -z "$RCJOBHELP" ] && writeresumefile
 		if [ -z "$RCDRYRUN" ]
 		then
 			RCJOBTMP=$(mktemp $RCSCRIPTTMPDIR/rcjob-XXXXXX.sh)

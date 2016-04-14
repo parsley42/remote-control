@@ -3,8 +3,7 @@
 # writeresumefile writes out a compiled VAR=VALUE file for the job to save
 # state between runs. It also performs syntax checking of the job metadata.
 writeresumefile(){
-	local RCJOBCFGLINE RCJOBSCRIPT RCREQUIRELINE RCVARLINE RCVAR RCRECORDED
-	RCJOBSCRIPT=$1
+	local RCJOBCFGLINE RCREQUIRELINE RCVARLINE RCVAR RCRECORDED
 	RCRESUMEFILE="$RCRESUMEDIR/rc-resume-${RCJOBID}.defs"
 	cat > "$RCRESUMEFILE" << EOF
 RCJOB=$RCJOB
@@ -131,7 +130,7 @@ processvars(){
 				if echo "$RCVAL" | grep -qP "$RCVARREGEX"
 				then
 					RCANSWERED="$RCANSWERED $RCNEXTVAR"
-					eval $RCNEXTVAR=$RCVAL
+					eval $RCNEXTVAR=\"$RCVAL\"
 				else
 					echo "\"$RCVAL\" doesn't match regex for $RCNEXTVAR: $RCVARREGEX" >&2
 				fi
@@ -139,13 +138,16 @@ processvars(){
 			# If the depvars function is defined, call it in case required vars needs to change
 			type depvars &>/dev/null && depvars
 		done
-		writeresumefile $RCJOBSCRIPT
+		RCANSWERED="${RCANSWERED# }"
+		RCANSWERED="${RCANSWERED% }"
+		RCPROVIDED="$RCANSWERED"
+		writeresumefile
 	else # exit / resume workflow
 		# If the depvars function is defined, call it
 		type depvars &>/dev/null && depvars
 		for RCREQUIRE in $RCREQVARS
 		do
-			if ! echo " $RCPROVIDED " | grep -q " $RCREQUIRE "
+			if [  ]
 			then
 				RCALLMET="false"
 				# All vars were checked in writeresumefile; this can't be blank
@@ -155,6 +157,7 @@ processvars(){
 		done
 		if [ "$RCALLMET" = "false" ]
 		then
+			writeresumefile
 			for RCVAR in $RCOPTVARS
 			do
 				parsevarline $RCVAR
@@ -187,6 +190,7 @@ processvars(){
 			echo "# $RCVARDESC"
 			echo "$RCVAR=${!RCVAR}"
 		done
+		writeresumefile
 		# exit value 3 -> confirmation required
 		exit 3
 	else

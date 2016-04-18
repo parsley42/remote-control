@@ -35,7 +35,7 @@ listsitetasks(){
 	echo "### Tasks for $SITE:"
 	if [ -e "$RCROOT/$SITE/tasks.conf" ]
 	then
-		grep -v '^$' $RCROOT/$SITE/tasks.conf | grep -v '^#' | grep RCCOMMAND
+		grep -v '^$' $RCROOT/$SITE/tasks.conf | grep -v '^#' | grep RCCOMMAND || :
 	fi
 	if [ -d "$RCROOT/$SITE/tasks" ]
 	then

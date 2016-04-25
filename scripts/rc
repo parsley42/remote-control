@@ -4,7 +4,7 @@
 RCDIR=$(dirname `readlink -f $0`)
 RCROOT=$(dirname $RCDIR)
 
-RCSSHOPTS="-o ConnectTimeout=5"
+RCSSHOPTS="-o ConnectTimeout=5 -o StrictHostKeyChecking=no -o BatchMode=yes"
 
 # We want RCSITE in environment to supersede a configured value
 [ -n "$RCSITE" ] && RCSAVESITE=$RCSITE
@@ -483,6 +483,7 @@ then
 fi
 
 [ -z "$RCTASKNAME" ] && RCTASKNAME="$RCCOMMAND" || :
+
 for RCREMOTE in $RCEXECHOSTS
 do
 	hostnicename $RCREMOTE

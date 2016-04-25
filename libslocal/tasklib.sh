@@ -3,12 +3,13 @@
 
 connect(){
 	local RCREMOTE=$1
+	shift
 	if [ "$RCREMOTE" = "localhost" ]
 	then
 		cat > $RCTASKTMP
-		$RCTASKTMP
+		$RCTASKTMP "$@"
 	else
-		ssh $RCSSHOPTS -T $RCREMOTE
+		ssh $RCSSHOPTS -T $RCREMOTE "$@"
 	fi
 }
 

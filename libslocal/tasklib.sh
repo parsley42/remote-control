@@ -1,6 +1,117 @@
 #!/bin/bash
 # tasklib.sh - rc task functions
 
+connect(){
+	local RCREMOTE=$1
+	if [ "$RCREMOTE" = "localhost" ]
+	then
+		cat > $RCTASKTMP
+		$RCTASKTMP
+	else
+		ssh $RCSSHOPTS -T $RCREMOTE
+	fi
+}
+
+# Piper generates the input to ssh, which amounts to a shell script run
+# in immediate mode
+piper(){
+	local RCHOST=$1
+	local RCTASK=$2
+	shift 2
+	if [ "$RCHOST" = "localhost" ]
+	then
+		# When running locally, we need to spit out the shell heading and
+		# remove the temporary file.
+		echo "#!/bin/bash -e"
+		echo "rm -f $RCTASKTMP"
+	fi
+	# If we're sudo'ing, take care of that first
+	if [ -n "$RCELEVATE" ]
+	then
+		case $RCELEVATETYPE in
+			SUDOPASS)
+				# To supply a sudo password we have to jump through some hoops
+				# with a very temporary sudo askpass helper script
+				RCASKPASS=rc-helper-$(date | md5sum | cut -f 1 -d' ').sh
+				echo "export SUDO_ASKPASS=\$HOME/$RCASKPASS"
+				echo "echo '#!/bin/bash' > \$HOME/$RCASKPASS"
+				[ -n "$RCDRYRUN" ] && echo "RCSUDOPASS=\"echo <password>\""
+				if [ -z "$RCDRYRUN" ]
+				then
+					[ -n "$RCTRACE" ] && echo "set +x"
+					echo "RCSUDOPASS=\"echo $RCSUDOPASS\""
+					[ -n "$RCTRACE" ] && echo "set -x"
+				fi
+				cat $RCROOT/libsremote/sudosetup.sh
+				# This will fail if user's $HOME != /home/$SUDO_USER
+				# but the file will be removed below after sudo exits
+				echo "rm -f /home/\$SUDO_USER/$RCASKPASS"
+				;;
+			SUDONOPASS)
+				# When there's no password required, we just sudo su
+				echo "sudo su <<\"RCSUDOSCRIPTEOF\""
+				;;
+			ROOTLOGIN)
+				unset RCELEVATE # so we don't bother closing sudo later
+				;;
+		esac
+	fi
+	echo "set -e"
+	RCTASKID=$(generateid)
+	[ -n "$RCTRACE" ] && echo "set -x"
+	# Set the task ID
+	echo "RCTASKID=$RCTASKID"
+	# Send libraries for remote use
+	for RCREMOTELIB in errtrap.sh status.sh
+	do
+		if ! echo " $RCEXCLUDELIBS " | grep -q " $RCREMOTELIB "
+		then
+			cat $RCROOT/libsremote/$RCREMOTELIB
+		fi
+	done
+	# Send variable definitions
+	taskdefs $RCHOST $RCTASK
+	# Set the positional values, options and arguments
+	[ -n "$SETSTRING" ] && echo "$SETSTRING" || :
+	echo "echo $RCTASKID task starting on $RCHOST: $(basename $RCSCRIPT) >&2"
+	# Make note of the line before the script starts
+	echo "RCFIRSTLINE=\$LINENO"
+	# Finally, run the task
+	cat $RCSCRIPTPATH
+	# Close the sudo verbatim heredoc started in sudosetup.sh
+	if [ -n "$RCELEVATE" ]
+	then
+		echo "RCSUDOSCRIPTEOF"
+		echo "RETVAL=\$?"
+		[ "$RCELEVATETYPE" = "SUDOPASS" ] && echo "rm -f \$HOME/$RCASKPASS"
+		echo "exit \$RETVAL"
+	fi
+}
+
+hosterrorcheck(){
+	RCRETVAL=$?
+	# Turn error trapping back on
+	set -e
+	trap 'error_handler "${BASH_COMMAND}" ${LINENO} $?' ERR
+	if [ $RCRETVAL -ne 0 ]
+	then
+		if [ $RCRETVAL -eq 255 ]
+		then
+			echo "ssh process exited with error connecting to $RCREMOTE, exit code:255" >&2
+		else
+			[ -z "$RCPARALLEL" ] && echo "Remote host $RCREMOTE exited with error code:$RCRETVAL" >&2
+		fi
+		if [ $RCNUMHOSTS -eq 1 ]
+		then
+			# If we're operating on a single host and it fails,
+			# exit with the same error code.
+			trap - ERR
+			exit $RCRETVAL
+		fi
+	fi
+	return $RCRETVAL
+}
+
 # taskdefs cat's out all the definitions files relevant to a task.
 # Each successive definitions file can override a previous.
 taskdefs (){

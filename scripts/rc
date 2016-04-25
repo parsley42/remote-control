@@ -465,75 +465,6 @@ then
 	fi
 fi
 
-# Piper generates the input to ssh, which amounts to a shell script run
-# in immediate mode
-piper(){
-	local RCHOST=$1
-	local RCTASK=$2
-	shift 2
-	# If we're sudo'ing, take care of that first
-	if [ -n "$RCELEVATE" ]
-	then
-		case $RCELEVATETYPE in
-			SUDOPASS)
-				# To supply a sudo password we have to jump through some hoops
-				# with a very temporary sudo askpass helper script
-				RCASKPASS=rc-helper-$(date | md5sum | cut -f 1 -d' ').sh
-				echo "export SUDO_ASKPASS=\$HOME/$RCASKPASS"
-				echo "echo '#!/bin/bash' > \$HOME/$RCASKPASS"
-				[ -n "$RCDRYRUN" ] && echo "RCSUDOPASS=\"echo <password>\""
-				if [ -z "$RCDRYRUN" ]
-				then
-					[ -n "$RCTRACE" ] && echo "set +x"
-					echo "RCSUDOPASS=\"echo $RCSUDOPASS\""
-					[ -n "$RCTRACE" ] && echo "set -x"
-				fi
-				cat $RCROOT/libsremote/sudosetup.sh
-				# This will fail if user's $HOME != /home/$SUDO_USER
-				# but the file will be removed below after sudo exits
-				echo "rm -f /home/\$SUDO_USER/$RCASKPASS"
-				;;
-			SUDONOPASS)
-				# When there's no password required, we just sudo su
-				echo "sudo su <<\"RCSUDOSCRIPTEOF\""
-				;;
-			ROOTLOGIN)
-				unset RCELEVATE # so we don't bother closing sudo later
-				;;
-		esac
-	fi
-	echo "set -e"
-	RCTASKID=$(generateid)
-	[ -n "$RCTRACE" ] && echo "set -x"
-	# Set the task ID
-	echo "RCTASKID=$RCTASKID"
-	# Send libraries for remote use
-	for RCREMOTELIB in errtrap.sh status.sh
-	do
-		if ! echo " $RCEXCLUDELIBS " | grep -q " $RCREMOTELIB "
-		then
-			cat $RCROOT/libsremote/$RCREMOTELIB
-		fi
-	done
-	# Send variable definitions
-	taskdefs $RCHOST $RCTASK
-	# Set the positional values, options and arguments
-	[ -n "$SETSTRING" ] && echo "$SETSTRING" || :
-	echo "echo $RCTASKID task starting on $RCHOST: $(basename $RCSCRIPT) >&2"
-	# Make note of the line before the script starts
-	echo "RCFIRSTLINE=\$LINENO"
-	# Finally, run the task
-	cat $RCSCRIPTPATH
-	# Close the sudo verbatim heredoc started in sudosetup.sh
-	if [ -n "$RCSUDOPASS" ]
-	then
-		echo "RCSUDOSCRIPTEOF"
-		echo "RETVAL=\$?"
-		echo "rm -f \$HOME/$RCASKPASS"
-		echo "exit \$RETVAL"
-	fi
-}
-
 # Should output go to files?
 RCHOSTARRAY=($RCEXECHOSTS)
 RCNUMHOSTS=${#RCHOSTARRAY[@]}
@@ -551,30 +482,6 @@ then
 	[ -z "$RCSERIAL" -a $RCNUMHOSTS -gt 1 ] && RCPARALLEL=true # multiple hosts, run in background
 fi
 
-hosterrorcheck(){
-	RCRETVAL=$?
-	# Turn error trapping back on
-	set -e
-	trap 'error_handler "${BASH_COMMAND}" ${LINENO} $?' ERR
-	if [ $RCRETVAL -ne 0 ]
-	then
-		if [ $RCRETVAL -eq 255 ]
-		then
-			echo "ssh process exited with error connecting to $RCREMOTE, exit code:255" >&2
-		else
-			[ -z "$RCPARALLEL" ] && echo "Remote host $RCREMOTE exited with error code:$RCRETVAL" >&2
-		fi
-		if [ $RCNUMHOSTS -eq 1 ]
-		then
-			# If we're operating on a single host and it fails,
-			# exit with the same error code.
-			trap - ERR
-			exit $RCRETVAL
-		fi
-	fi
-	return $RCRETVAL
-}
-
 [ -z "$RCTASKNAME" ] && RCTASKNAME="$RCCOMMAND" || :
 for RCREMOTE in $RCEXECHOSTS
 do
@@ -590,18 +497,23 @@ do
 		# Don't error out or trap if ssh returns an error
 		set +e
 		trap - ERR
+		if [ "$RCREMOTE" = "localhost" ]
+		then
+			RCTASKTMP=$(mktemp $RCSCRIPTTMPDIR/rctask-XXXXXX.sh)
+			chmod u+x $RCTASKTMP
+		fi
 		# Send the script to the remote host over ssh
 		if [ -n "$RCPARALLEL" ]
 		then
 			if [ -n "$RCSCRIPT" ]
 			then
 				piper $RCNICENAME $RCTASKNAME $* | (
-					ssh $RCSSHOPTS -T $RCREMOTE > $RCOUTPUTDIR/$RCREMOTE.out 2> $RCOUTPUTDIR/$RCREMOTE.err
+					connect $RCREMOTE > $RCOUTPUTDIR/$RCREMOTE.out 2> $RCOUTPUTDIR/$RCREMOTE.err
 					hosterrorcheck
 				) &
 				RCWAITTASKS="$RCWAITTASKS $!:$RCNICENAME"
 			else
-				(	ssh $RCSSHOPTS -T $RCREMOTE "$RCCOMMAND $*" > $RCOUTPUTDIR/$RCREMOTE.out 2> $RCOUTPUTDIR/$RCREMOTE.err
+				(	connect $RCREMOTE "$RCCOMMAND $*" > $RCOUTPUTDIR/$RCREMOTE.out 2> $RCOUTPUTDIR/$RCREMOTE.err
 					hosterrorcheck
 				) &
 				RCWAITTASKS="$RCWAITTASKS $!:$RCNICENAME"
@@ -612,11 +524,11 @@ do
 		else
 			if [ -z "$RCOUTPUTDIR" ]
 			then
-				[ -n "$RCSCRIPT" ] && { piper $RCNICENAME $RCTASKNAME $* | ssh $RCSSHOPTS -T $RCREMOTE; hosterrorcheck; }
-				[ -n "$RCCOMMAND" ] && { ssh $RCSSHOPTS -T $RCREMOTE "$RCCOMMAND $*"; hosterrorcheck; }
+				[ -n "$RCSCRIPT" ] && { piper $RCNICENAME $RCTASKNAME $* | connect $RCREMOTE; hosterrorcheck; }
+				[ -n "$RCCOMMAND" ] && { connect $RCREMOTE "$RCCOMMAND $*"; hosterrorcheck; }
 			else
-				[ -n "$RCSCRIPT" ] && { piper $RCNICENAME $RCTASKNAME $* | ssh $RCSSHOPTS -T $RCREMOTE > $RCOUTPUTDIR/$RCREMOTE.out 2> $RCOUTPUTDIR/$RCREMOTE.err; hosterrorcheck; }
-				[ -n "$RCCOMMAND" ] && { ssh $RCSSHOPTS -T $RCREMOTE "$RCCOMMAND $*" > $RCOUTPUTDIR/$RCREMOTE.out 2> $RCOUTPUTDIR/$RCREMOTE.err; hosterrorcheck; }
+				[ -n "$RCSCRIPT" ] && { piper $RCNICENAME $RCTASKNAME $* | connect $RCREMOTE > $RCOUTPUTDIR/$RCREMOTE.out 2> $RCOUTPUTDIR/$RCREMOTE.err; hosterrorcheck; }
+				[ -n "$RCCOMMAND" ] && { connect $RCREMOTE "$RCCOMMAND $*" > $RCOUTPUTDIR/$RCREMOTE.out 2> $RCOUTPUTDIR/$RCREMOTE.err; hosterrorcheck; }
 			fi
 		fi
 	fi

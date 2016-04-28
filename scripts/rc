@@ -4,7 +4,7 @@
 RCDIR=$(dirname `readlink -f $0`)
 RCROOT=$(dirname $RCDIR)
 
-RCSSHOPTS="-o ConnectTimeout=5 -o StrictHostKeyChecking=no -o BatchMode=yes"
+RCSSHOPTS="-o ConnectTimeout=5"
 
 # We want RCSITE in environment to supersede a configured value
 [ -n "$RCSITE" ] && RCSAVESITE=$RCSITE
@@ -484,10 +484,23 @@ fi
 
 [ -z "$RCTASKNAME" ] && RCTASKNAME="$RCCOMMAND" || :
 
+# Handle keys first - we just connect and exit, so the user can accept any ssh
+# keys (or cancel if there's a problem). With any luck, the user has configured
+# ControlPersist for some number of seconds, so the "real" connection will be
+# super fast and this won't end up costing anything.
+for RCREMOTE in $RCEXECHOSTS
+do
+	if [ "$RCREMOTE" != "localhost" ]
+	then
+		ssh $RCSSHOPTS -T $RCREMOTE "exit"
+	fi
+done
+
+# Now do the tasks
 for RCREMOTE in $RCEXECHOSTS
 do
 	hostnicename $RCREMOTE
-	if [ -n "$RCDRYRUN"  ]
+	if [ -n "$RCDRYRUN" ]
 	then
 		echo "*** DRY RUN ***" >&2
 		echo "*** Sending \"$RCTASKNAME\" to $RCNICENAME" >&2

@@ -6,10 +6,19 @@ RCROOT=$(dirname $RCDIR)
 
 RCSSHOPTS="-o ConnectTimeout=5"
 
-# We want RCSITE in environment to supersede a configured value
-[ -n "$RCSITE" ] && RCSAVESITE=$RCSITE
+# We want RCDEFAULTSITE and RCSITEDIR in environment to supersede a configured value
+[ -n "$RCDEFAULTSITE" ] && RCSAVESITE=$RCDEFAULTSITE
+[ -n "$RCSITEDIR" ] && RCSAVESITEDIR=$RCSITEDIR
+
+# Source global then local config, so that local overrides global
+[ -e /etc/rcconfig ] && source /etc/rcconfig
 [ -e ~/.rcconfig ] && source ~/.rcconfig
-[ -n "$RCSAVESITE" ] && RCSITE="$RCSAVESITE"
+
+[ -n "$RCSAVESITE" ] && RCDEFAULTSITE="$RCSAVESITE"
+[ -n "$RCSAVESITEDIR" ] && RCSITEDIR="$RCSAVESITEDIR"
+
+# Location of the local sites directory, defaults to in-tree
+[ -z "$RCSITEDIR" ] && RCSITEDIR=$RCROOT/sites
 
 # Default temporary script dir to $HOME if unconfigured, probably just for
 # bootstrapping (install). Since CentOS7 and presumably other distros
@@ -31,15 +40,15 @@ errtrap
 . $RCROOT/libslocal/common.sh
 
 # Try to figure out the site to use
-if [ -z "$RCSITE" ] # environment variable overrides ~/.rcsite
+if [ -z "$RCDEFAULTSITE" ] # environment variable overrides ~/.rcsite
 then
 	# If there's only one site, default to that
-	RCSITECOUNT=$(ls $RCROOT/sites | wc -l)
+	RCSITECOUNT=$(ls $RCSITEDIR | wc -l)
 	if [ $RCSITECOUNT -eq 1 ]
 	then
-		RCSITE=$(ls $RCROOT/sites)
+		RCDEFAULTSITE=$(ls $RCSITEDIR)
 	else
-		RCSITE="FooBarBaz" # This makes other coding a little less painful.
+		RCDEFAULTSITE="FooBarBaz" # This makes other coding a little less painful.
 		# In practice it just means more failed tests in rc's search paths
 	fi
 fi
@@ -175,10 +184,10 @@ case $OPT in
 		RCPROMPT="true"
 		;;
 	s)
-		RCSITE=${OPTARG}
-		if [ ! -d "$RCROOT/sites/$RCSITE" ]
+		RCDEFAULTSITE=${OPTARG}
+		if [ ! -d "$RCSITEDIR/$RCDEFAULTSITE" ]
 		then
-			errorout "RCSITE ($RCSITE) refers to non-existent directory ($RCROOT/sites/$RCSITE)"
+			errorout "RCDEFAULTSITE ($RCDEFAULTSITE) refers to non-existent directory ($RCSITEDIR/$RCDEFAULTSITE)"
 		fi
 		;;
 	S)
@@ -198,7 +207,7 @@ case $OPT in
 esac
 done
 
-[ -e $RCROOT/sites/$RCSITE/rc.conf ] && source $RCROOT/sites/$RCSITE/rc.conf
+[ -e $RCSITEDIR/$RCDEFAULTSITE/rc.conf ] && source $RCSITEDIR/$RCDEFAULTSITE/rc.conf
 
 # Get the args, up to three
 RCARGNUM1=$OPTIND
@@ -226,7 +235,7 @@ case $RCSUBCMD in
 			# Note that .rcconfig has already been sourced, message here is for informational purposes
 			[ -e ~/.rcconfig ] && echo "Sourcing ~/.rcconfig"
 			# Locate the job script
-			for RCJOBDIR in sites/$RCSITE sites/common defaultsite
+			for RCJOBDIR in sites/$RCDEFAULTSITE sites/common defaultsite
 			do
 				RCJOBSCRIPT="$RCROOT/$RCJOBDIR/jobs/$RCJOB"
 				if [ -e "$RCJOBSCRIPT" ]
@@ -235,7 +244,7 @@ case $RCSUBCMD in
 					RCCONFIGLINE=$(grep -h "^#RCCONFIG:" "$RCJOBSCRIPT" || :)
 					[ -n "$RCCONFIGLINE" ] && eval ${RCCONFIGLINE#*:}
 					[ "$RCREQUIRECONFIRM" = "true" -a -z "$RCCONFIRMCODE" ] && RCCONFIRMCODE=$(generateid)
-					for RCJOBDEFPATH in "$RCROOT/defaultsite" "$RCROOT/sites/common" "$RCROOT/sites/$RCSITE"
+					for RCJOBDEFPATH in "$RCROOT/defaultsite" "$RCSITEDIR/common" "$RCSITEDIR/$RCDEFAULTSITE"
 					do
 						if [ -e "$RCJOBDEFPATH/jobdefs/${RCDEFSNAME}.defs" ]
 						then
@@ -286,7 +295,7 @@ case $RCSUBCMD in
 		else
 			RCJOBHELP="help"
 		fi
-		export RCROOT RCSITE RCJOBID RCJOB RCJOBSCRIPT
+		export RCROOT RCDEFAULTSITE RCJOBID RCJOB RCJOBSCRIPT
 		[ -z "$RCJOBHELP" ] && writeresumefile
 		if [ -z "$RCDRYRUN" ]
 		then
@@ -305,8 +314,8 @@ case $RCSUBCMD in
 		[ -z "$RCARG1" ] && errorout "Missing argument to list command"
 		case "$RCARG1" in
 			jobs)
-				RCSITE=${RCARG2:-$RCSITE}
-				for SITE in "sites/$RCSITE" sites/common defaultsite
+				RCDEFAULTSITE=${RCARG2:-$RCDEFAULTSITE}
+				for SITE in "sites/$RCDEFAULTSITE" sites/common defaultsite
 				do
 					RCJOBLIST=$(ls -A $RCROOT/$SITE/jobs/ 2>/dev/null || :)
 					[ -n "$RCJOBLIST" ] && echo -e "### Jobs for $SITE:\n$RCJOBLIST"
@@ -323,12 +332,12 @@ case $RCSUBCMD in
 				exit 0
 				;;
 			sites)
-				ls -d $RCROOT/sites/* | xargs basename -a
+				ls -d $RCSITEDIR/* | xargs basename -a
 				exit 0
 				;;
 			hostgroups)
-				[ -n "$(ls -A $RCROOT/sites/$RCSITE/hostgroups)" ] && \
-					ls -d $RCROOT/sites/$RCSITE/hostgroups/* | xargs basename -s .hosts
+				[ -n "$(ls -A $RCSITEDIR/$RCDEFAULTSITE/hostgroups)" ] && \
+					ls -d $RCSITEDIR/$RCDEFAULTSITE/hostgroups/* | xargs basename -s .hosts
 				exit 0
 				;;
 			hostgroup)

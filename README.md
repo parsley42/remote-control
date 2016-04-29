@@ -92,7 +92,7 @@ The rc `sites/` directory is for user content, and should be it's own separate g
 * sites/mylegacysite - might contain an `update` task and hostgroups for your legacy servers
 
 When searching for task configuration, tasks, jobs, and definitions files, rc searches in this order:
-* sites/$RCSITE (from ~/.rcsite, RCSITE environment variable, or -s option)
+* sites/$RCDEFAULTSITE (from ~/.rcsite, RCDEFAULTSITE environment variable, or -s option)
 * sites/common
 * defaultsite
 
@@ -100,7 +100,7 @@ When searching for task configuration, tasks, jobs, and definitions files, rc se
 
 Definitions files are simple snippets of bash scripts with variable
 definitions. A given task can specify the name of a definitions file to use,
-and rc will search for it as listed above. Additionally, if $RCSITE/site.defs
+and rc will search for it as listed above. Additionally, if $RCSITEDIR/site.defs
 exists, it will be sourced before the task-specified file (or one specified as
 an option to rc).
 

@@ -4,8 +4,8 @@ resolvehostgroup(){
 	functrap
 	local HOSTGROUP HOST REST HOSTLIST
 	HOSTGROUP=${1#@}
-	HOSTFILE="$RCROOT/sites/$RCSITE/hostgroups/${HOSTGROUP}.hosts"
-	[ ! -e "$HOSTFILE" ] && { errormsg "Hosts file $RCROOT/sites/$RCSITE/hostgroups/${HOSTGROUP}.hosts doesn't exist"; return 0; }
+	HOSTFILE="$RCSITEDIR/$RCDEFAULTSITE/hostgroups/${HOSTGROUP}.hosts"
+	[ ! -e "$HOSTFILE" ] && { errormsg "Hosts file $RCSITEDIR/$RCDEFAULTSITE/hostgroups/${HOSTGROUP}.hosts doesn't exist"; return 0; }
 	while read HOST REST
 	do
 		[[ $HOST = \#* ]] && continue
@@ -20,9 +20,9 @@ resolvehostalias(){
 	local MATCHHOST HOSTMATCH HOSTLINES
 	MATCHHOST=$1
 	HOSTLINES=0
-	if [ -n "$(ls -A "$RCROOT/sites/$RCSITE/hostgroups/" 2>/dev/null)" ]
+	if [ -n "$(ls -A "$RCSITEDIR/$RCDEFAULTSITE/hostgroups/" 2>/dev/null)" ]
 	then
-		HOSTMATCH=$(grep -Rh "\<$MATCHHOST\>" "$RCROOT/sites/$RCSITE/hostgroups" | sort | uniq)
+		HOSTMATCH=$(grep -Rh "\<$MATCHHOST\>" "$RCSITEDIR/$RCDEFAULTSITE/hostgroups" | sort | uniq)
 		HOSTLINES=$(echo "$HOSTMATCH" | wc -l)
 	fi
 	if [ -n "$HOSTMATCH" -a $HOSTLINES -eq 1 ]
@@ -37,10 +37,10 @@ resolvehostalias(){
 hostnicename(){
 	functrap
 	local MATCHHOST=$1
-	[ ! -d "$RCROOT/sites/$RCSITE/hostgroups" ] && { RCNICENAME=$MATCHHOST; return 0; }
-	if [ -n "$(ls -A "$RCROOT/sites/$RCSITE/hostgroups/")" ]
+	[ ! -d "$RCSITEDIR/$RCDEFAULTSITE/hostgroups" ] && { RCNICENAME=$MATCHHOST; return 0; }
+	if [ -n "$(ls -A "$RCSITEDIR/$RCDEFAULTSITE/hostgroups/")" ]
 	then
-		local HOSTMATCH=$(grep -Rh "^\<$MATCHHOST\>" "$RCROOT/sites/$RCSITE/hostgroups" | sort | uniq)
+		local HOSTMATCH=$(grep -Rh "^\<$MATCHHOST\>" "$RCSITEDIR/$RCDEFAULTSITE/hostgroups" | sort | uniq)
 		local HOSTLINES=$(echo "$HOSTMATCH" | wc -l)
 		if [ $HOSTLINES -eq 1 -a -n "$HOSTMATCH" ]
 		then

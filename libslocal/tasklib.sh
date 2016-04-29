@@ -119,17 +119,17 @@ taskdefs (){
 	local RCHOST=$1
 	local RCTASK=$2
 	# If there's a site.defs file, add it in
-	[ -e "$RCROOT/sites/$RCSITE/site.defs" ] && cat "$RCROOT/sites/$RCSITE/site.defs" || :
+	[ -e "$RCSITEDIR/$RCDEFAULTSITE/site.defs" ] && cat "$RCSITEDIR/$RCDEFAULTSITE/site.defs" || :
 	# Same for a host .defs file
-	[ -e "$RCROOT/sites/$RCSITE/hosts/$RCHOST/host.defs" ] && cat "$RCROOT/sites/$RCSITE/hosts/$RCHOST/host.defs" || :
+	[ -e "$RCSITEDIR/$RCDEFAULTSITE/hosts/$RCHOST/host.defs" ] && cat "$RCSITEDIR/$RCDEFAULTSITE/hosts/$RCHOST/host.defs" || :
 	# First, any definitions from defaultsite
 	[ -e "$RCROOT/defaultsite/taskdefs/${RCTASK}.defs" ] && cat "$RCROOT/defaultsite/taskdefs/${RCTASK}.defs" || :
 	# ... then definitions from sites/common
-	[ -e "$RCROOT/sites/common/taskdefs/${RCTASK}.defs" ] && cat "$RCROOT/sites/common/taskdefs/${RCTASK}.defs" || :
+	[ -e "$RCSITEDIR/common/taskdefs/${RCTASK}.defs" ] && cat "$RCSITEDIR/common/taskdefs/${RCTASK}.defs" || :
 	# Now check for site task definitions
-	[ -e "$RCROOT/sites/$RCSITE/taskdefs/${RCTASK}.defs" ] && cat "$RCROOT/sites/$RCSITE/taskdefs/${RCTASK}.defs" || :
+	[ -e "$RCSITEDIR/$RCDEFAULTSITE/taskdefs/${RCTASK}.defs" ] && cat "$RCSITEDIR/$RCDEFAULTSITE/taskdefs/${RCTASK}.defs" || :
 	# ... and host task definitions
-	[ -e "$RCROOT/sites/$RCSITE/hosts/$RCHOST/taskdefs/${RCTASK}.defs" ] && cat "$RCROOT/sites/$RCSITE/hosts/$RCHOST/taskdefs/${RCTASK}.defs" || :
+	[ -e "$RCSITEDIR/$RCDEFAULTSITE/hosts/$RCHOST/taskdefs/${RCTASK}.defs" ] && cat "$RCSITEDIR/$RCDEFAULTSITE/hosts/$RCHOST/taskdefs/${RCTASK}.defs" || :
 	# Finally, if an RCDEFSFILE argument was passed on the command line, it overrides everything
 	[ -n "$RCDEFSFILE" ] && cat "$RCDEFSFILE" || :
 }
@@ -137,12 +137,12 @@ taskdefs (){
 # List all site tasks for list command
 listsitetasks(){
 	trap 'func_error_handler ${FUNCNAME[0]} "${BASH_COMMAND}" $LINENO $?' ERR
-	local RCSITESCRIPT RCSCRIPT SCRIPTCONF SITE RCTASKLINE
+	local RCDEFAULTSITESCRIPT RCSCRIPT SCRIPTCONF SITE RCTASKLINE
 	if [ "$1" = defaultsite ]
 	then
 		SITE=$1
 	else
-		SITE="sites/${1:-$RCSITE}"
+		SITE="sites/${1:-$RCDEFAULTSITE}"
 	fi
 	echo "### Tasks for $SITE:"
 	if [ -e "$RCROOT/$SITE/tasks.conf" ]
@@ -151,15 +151,15 @@ listsitetasks(){
 	fi
 	if [ -d "$RCROOT/$SITE/tasks" ]
 	then
-		for RCSITESCRIPT in $(cd "$RCROOT/$SITE/tasks"; echo *)
+		for RCDEFAULTSITESCRIPT in $(cd "$RCROOT/$SITE/tasks"; echo *)
 		do
-			[ ! -e "$RCROOT/$SITE/tasks/$RCSITESCRIPT" ] && break # when * expands to *
-			RCSCRIPT=$(basename $RCSITESCRIPT .sh)
+			[ ! -e "$RCROOT/$SITE/tasks/$RCDEFAULTSITESCRIPT" ] && break # when * expands to *
+			RCSCRIPT=$(basename $RCDEFAULTSITESCRIPT .sh)
 			if [ -e "$RCROOT/$SITE/tasks.conf" ]
 			then
 				RCTASKLINE=$(grep -h "^$RCSCRIPT:" "$RCROOT/$SITE/tasks.conf" || :)
 			fi
-			SCRIPTCONF=$(grep -h "^#RCCONFIG:" "$RCROOT/$SITE/tasks/$RCSITESCRIPT" || :)
+			SCRIPTCONF=$(grep -h "^#RCCONFIG:" "$RCROOT/$SITE/tasks/$RCDEFAULTSITESCRIPT" || :)
 			echo -n "$RCSCRIPT"
 			if [ -n "$SCRIPTCONF" ]
 			then
@@ -178,7 +178,7 @@ gettaskconf(){
 	trap 'func_error_handler ${FUNCNAME[0]} "${BASH_COMMAND}" $LINENO $?' ERR
 	local RCTASKNAME=$1
 	local SITE
-	# Look for task configuration first - userconf first, then RCSITE, common, default; first wins
+	# Look for task configuration first - userconf first, then RCDEFAULTSITE, common, default; first wins
 	if [ -e ~/.tasks.conf ]
 	then
 		RCTASKLINE=$(grep -h "^$RCTASKNAME:" ~/.tasks.conf || :)
@@ -188,7 +188,7 @@ gettaskconf(){
 		eval ${RCTASKLINE#*:}
 		[ -n "$RCCOMMAND" ] && return 0 # for an RCCOMMAND, there's no script
 	else
-		for SITE in "sites/$RCSITE" sites/common defaultsite
+		for SITE in "sites/$RCDEFAULTSITE" sites/common defaultsite
 		do
 			TASKFILE="$RCROOT/$SITE/tasks.conf"
 			if [ -e "$TASKFILE" ]
@@ -204,7 +204,7 @@ gettaskconf(){
 		done
 	fi
 	# Now look for the script itself, first check RCSCRIPT, then look in
-	# RCSITE/tasks/, then default/tasks/
+	# RCDEFAULTSITE/tasks/, then default/tasks/
 	if [ -n "$RCSCRIPT" ]
 	then
 		if [[ $RCSCRIPT = */* ]] # was the full path specified?
@@ -217,18 +217,18 @@ gettaskconf(){
 		RCSCRIPT=$RCTASKNAME
 	fi
 	# Now search site directories for RCSCRIPTPATH
-	if [ -e "$RCROOT/sites/$RCSITE/tasks/${RCTASKNAME}" ]
+	if [ -e "$RCSITEDIR/$RCDEFAULTSITE/tasks/${RCTASKNAME}" ]
 	then
-		RCSCRIPTPATH="$RCROOT/sites/$RCSITE/tasks/${RCTASKNAME}"
-	elif [ -e "$RCROOT/sites/$RCSITE/tasks/${RCTASKNAME}.sh" ]
+		RCSCRIPTPATH="$RCSITEDIR/$RCDEFAULTSITE/tasks/${RCTASKNAME}"
+	elif [ -e "$RCSITEDIR/$RCDEFAULTSITE/tasks/${RCTASKNAME}.sh" ]
 	then
-		RCSCRIPTPATH="$RCROOT/sites/$RCSITE/tasks/${RCTASKNAME}.sh"
-	elif [ -e "$RCROOT/sites/common/tasks/${RCTASKNAME}" ]
+		RCSCRIPTPATH="$RCSITEDIR/$RCDEFAULTSITE/tasks/${RCTASKNAME}.sh"
+	elif [ -e "$RCSITEDIR/common/tasks/${RCTASKNAME}" ]
 	then
-		RCSCRIPTPATH="$RCROOT/sites/common/tasks/${RCTASKNAME}"
-	elif [ -e "$RCROOT/sites/common/tasks/${RCTASKNAME}.sh" ]
+		RCSCRIPTPATH="$RCSITEDIR/common/tasks/${RCTASKNAME}"
+	elif [ -e "$RCSITEDIR/common/tasks/${RCTASKNAME}.sh" ]
 	then
-		RCSCRIPTPATH="$RCROOT/sites/common/tasks/${RCTASKNAME}.sh"
+		RCSCRIPTPATH="$RCSITEDIR/common/tasks/${RCTASKNAME}.sh"
 	elif [ -e "$RCROOT/defaultsite/tasks/${RCTASKNAME}" ]
 	then
 		RCSCRIPTPATH="$RCROOT/defaultsite/tasks/${RCTASKNAME}"

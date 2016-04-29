@@ -1,4 +1,5 @@
-RCSITE=<site I normally work with>
+RCDEFAULTSITE=<site I normally work with>
+RCSITEDIR=<local sites directory>
 RCADMINMAIL=<my email address>
 # Path to pipe/fifo for passdaemon (keeps elevate password in memory
 # for e.g. sudo)

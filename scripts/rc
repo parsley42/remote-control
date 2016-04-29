@@ -43,10 +43,10 @@ errtrap
 if [ -z "$RCDEFAULTSITE" ] # environment variable overrides ~/.rcsite
 then
 	# If there's only one site, default to that
-	RCSITECOUNT=$(ls $RCSITEDIR | wc -l)
+	RCSITECOUNT=$(ls $RCSITEDIR | grep -v '\<common\>' | wc -l)
 	if [ $RCSITECOUNT -eq 1 ]
 	then
-		RCDEFAULTSITE=$(ls $RCSITEDIR)
+		RCDEFAULTSITE=$(ls $RCSITEDIR | grep -v '\<common\>')
 	else
 		RCDEFAULTSITE="FooBarBaz" # This makes other coding a little less painful.
 		# In practice it just means more failed tests in rc's search paths
@@ -497,11 +497,21 @@ fi
 # keys (or cancel if there's a problem). With any luck, the user has configured
 # ControlPersist for some number of seconds, so the "real" connection will be
 # super fast and this won't end up costing anything.
+
+# Don't error out or trap if ssh returns an error
+set +e
+trap - ERR
+
 for RCREMOTE in $RCEXECHOSTS
 do
 	if [ "$RCREMOTE" != "localhost" ]
 	then
 		ssh $RCSSHOPTS -T $RCREMOTE "exit"
+		RETVAL=$?
+		if [ $RETVAL -eq 255 ]
+		then
+			errorout "Unable to connect to host $RCREMOTE"
+		fi
 	fi
 done
 
@@ -517,9 +527,6 @@ do
 		[ -n "$RCSCRIPT" ] && piper $RCNICENAME $RCTASKNAME $*
 	else
 		echo "*** Sending \"$RCTASKNAME\" to $RCNICENAME" >&2
-		# Don't error out or trap if ssh returns an error
-		set +e
-		trap - ERR
 		if [ "$RCREMOTE" = "localhost" ]
 		then
 			RCTASKTMP=$(mktemp $RCSCRIPTTMPDIR/rctask-XXXXXX.sh)

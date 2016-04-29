@@ -31,8 +31,8 @@ else
 	exec &> $LOG
 fi
 
-OLDOSVER=$(rccmd "cat /etc/system-release" $PATCHHOST 2>/dev/null) || OSVER="error"
-OLDKERNELVER=$(rccmd "uname -srv" $PATCHHOST 2>/dev/null) || KERNELVER="error"
+OLDOSVER=$(rccmd "cat /etc/system-release" $PATCHHOST 2>/dev/null) || OLDOSVER="error"
+OLDKERNELVER=$(rccmd "uname -srv" $PATCHHOST 2>/dev/null) || OLDKERNELVER="error"
 status "Calling yumupdate -r for $PATCHHOST"
 if rcdo yumupdate -r $PATCHHOST
 then

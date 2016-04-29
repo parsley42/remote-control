@@ -140,26 +140,26 @@ listsitetasks(){
 	local RCDEFAULTSITESCRIPT RCSCRIPT SCRIPTCONF SITE RCTASKLINE
 	if [ "$1" = defaultsite ]
 	then
-		SITE=$1
+		SITE=$RCROOT/defaultsite
 	else
-		SITE="sites/${1:-$RCDEFAULTSITE}"
+		SITE="$RCSITEDIR/${1:-$RCDEFAULTSITE}"
 	fi
 	echo "### Tasks for $SITE:"
-	if [ -e "$RCROOT/$SITE/tasks.conf" ]
+	if [ -e "$SITE/tasks.conf" ]
 	then
-		grep -v '^$' $RCROOT/$SITE/tasks.conf | grep -v '^#' | grep RCCOMMAND || :
+		grep -v '^$' $SITE/tasks.conf | grep -v '^#' | grep RCCOMMAND || :
 	fi
-	if [ -d "$RCROOT/$SITE/tasks" ]
+	if [ -d "$SITE/tasks" ]
 	then
-		for RCDEFAULTSITESCRIPT in $(cd "$RCROOT/$SITE/tasks"; echo *)
+		for RCDEFAULTSITESCRIPT in $(cd "$SITE/tasks"; echo *)
 		do
-			[ ! -e "$RCROOT/$SITE/tasks/$RCDEFAULTSITESCRIPT" ] && break # when * expands to *
+			[ ! -e "$SITE/tasks/$RCDEFAULTSITESCRIPT" ] && break # when * expands to *
 			RCSCRIPT=$(basename $RCDEFAULTSITESCRIPT .sh)
-			if [ -e "$RCROOT/$SITE/tasks.conf" ]
+			if [ -e "$SITE/tasks.conf" ]
 			then
-				RCTASKLINE=$(grep -h "^$RCSCRIPT:" "$RCROOT/$SITE/tasks.conf" || :)
+				RCTASKLINE=$(grep -h "^$RCSCRIPT:" "$SITE/tasks.conf" || :)
 			fi
-			SCRIPTCONF=$(grep -h "^#RCCONFIG:" "$RCROOT/$SITE/tasks/$RCDEFAULTSITESCRIPT" || :)
+			SCRIPTCONF=$(grep -h "^#RCCONFIG:" "$SITE/tasks/$RCDEFAULTSITESCRIPT" || :)
 			echo -n "$RCSCRIPT"
 			if [ -n "$SCRIPTCONF" ]
 			then
@@ -170,7 +170,6 @@ listsitetasks(){
 			fi
 		done
 	fi
-	set +x
 }
 
 # Get RCCOMMAND or RCSCRIPT (full path) for RCTASKNAME, and configuration (RCELEVATE, etc.)
@@ -188,9 +187,9 @@ gettaskconf(){
 		eval ${RCTASKLINE#*:}
 		[ -n "$RCCOMMAND" ] && return 0 # for an RCCOMMAND, there's no script
 	else
-		for SITE in "sites/$RCDEFAULTSITE" sites/common defaultsite
+		for SITE in "$RCSITEDIR/$RCDEFAULTSITE" $RCSITEDIR/common $RCROOT/defaultsite
 		do
-			TASKFILE="$RCROOT/$SITE/tasks.conf"
+			TASKFILE="$SITE/tasks.conf"
 			if [ -e "$TASKFILE" ]
 			then
 				RCTASKLINE=$(grep -h "^$RCTASKNAME:" "$TASKFILE" || :)

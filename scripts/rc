@@ -235,9 +235,9 @@ case $RCSUBCMD in
 			# Note that .rcconfig has already been sourced, message here is for informational purposes
 			[ -e ~/.rcconfig ] && echo "Sourcing ~/.rcconfig"
 			# Locate the job script
-			for RCJOBDIR in sites/$RCDEFAULTSITE sites/common defaultsite
+			for RCJOBDIR in $RCSITEDIR/$RCDEFAULTSITE $RCSITEDIR/common $RCROOT/defaultsite
 			do
-				RCJOBSCRIPT="$RCROOT/$RCJOBDIR/jobs/$RCJOB"
+				RCJOBSCRIPT="$RCJOBDIR/jobs/$RCJOB"
 				if [ -e "$RCJOBSCRIPT" ]
 				then
 					RCDEFSNAME="$RCJOB"
@@ -315,9 +315,9 @@ case $RCSUBCMD in
 		case "$RCARG1" in
 			jobs)
 				RCDEFAULTSITE=${RCARG2:-$RCDEFAULTSITE}
-				for SITE in "sites/$RCDEFAULTSITE" sites/common defaultsite
+				for SITE in "$RCSITEDIR/$RCDEFAULTSITE" $RCSITEDIR/common $RCROOT/defaultsite
 				do
-					RCJOBLIST=$(ls -A $RCROOT/$SITE/jobs/ 2>/dev/null || :)
+					RCJOBLIST=$(ls -A $SITE/jobs/ 2>/dev/null || :)
 					[ -n "$RCJOBLIST" ] && echo -e "### Jobs for $SITE:\n$RCJOBLIST"
 				done
 				exit 0

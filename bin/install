@@ -1,0 +1,28 @@
+#!/bin/bash
+
+# install - create symlinks for remote control in a given directory
+
+RCDIR=$(dirname `readlink -f $0`)
+
+usage() {
+	cat <<EOF
+Usage: install <bindir>
+	Install symlinks to rc scripts in a given directory, e.g. /usr/local/bin
+EOF
+exit 0
+}
+
+[ $# -ne 1 ] && usage
+
+INSTALLDIR=$1
+if [ ! -d $INSTALLDIR ]
+then
+	echo "Not a directory: $INSTALLDIR"
+	usage
+fi
+
+for RCLINK in rc rccmd rcdo rclist rcrun
+do
+	ln -snf $RCDIR/rc $INSTALLDIR/$RCLINK
+done
+ln -snf $RCDIR/passdaemon $INSTALLDIR/passdaemon

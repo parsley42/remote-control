@@ -122,8 +122,8 @@ taskdefs (){
 	[ -e "$RCSITEDIR/$RCDEFAULTSITE/site.defs" ] && cat "$RCSITEDIR/$RCDEFAULTSITE/site.defs" || :
 	# Same for a host .defs file
 	[ -e "$RCSITEDIR/$RCDEFAULTSITE/hosts/$RCHOST/host.defs" ] && cat "$RCSITEDIR/$RCDEFAULTSITE/hosts/$RCHOST/host.defs" || :
-	# First, any definitions from defaultsite
-	[ -e "$RCROOT/defaultsite/taskdefs/${RCTASK}.defs" ] && cat "$RCROOT/defaultsite/taskdefs/${RCTASK}.defs" || :
+	# First, any definitions from defaults
+	[ -e "$RCROOT/defaults/taskdefs/${RCTASK}.defs" ] && cat "$RCROOT/defaults/taskdefs/${RCTASK}.defs" || :
 	# ... then definitions from sites/common
 	[ -e "$RCSITEDIR/common/taskdefs/${RCTASK}.defs" ] && cat "$RCSITEDIR/common/taskdefs/${RCTASK}.defs" || :
 	# Now check for site task definitions
@@ -138,9 +138,9 @@ taskdefs (){
 listsitetasks(){
 	trap 'func_error_handler ${FUNCNAME[0]} "${BASH_COMMAND}" $LINENO $?' ERR
 	local RCDEFAULTSITESCRIPT RCSCRIPT SCRIPTCONF SITE RCTASKLINE
-	if [ "$1" = defaultsite ]
+	if [ "$1" = defaults ]
 	then
-		SITE=$RCROOT/defaultsite
+		SITE=$RCROOT/defaults
 	else
 		SITE="$RCSITEDIR/${1:-$RCDEFAULTSITE}"
 	fi
@@ -187,7 +187,7 @@ gettaskconf(){
 		eval ${RCTASKLINE#*:}
 		[ -n "$RCCOMMAND" ] && return 0 # for an RCCOMMAND, there's no script
 	else
-		for SITE in "$RCSITEDIR/$RCDEFAULTSITE" $RCSITEDIR/common $RCROOT/defaultsite
+		for SITE in "$RCSITEDIR/$RCDEFAULTSITE" $RCSITEDIR/common $RCROOT/defaults
 		do
 			TASKFILE="$SITE/tasks.conf"
 			if [ -e "$TASKFILE" ]
@@ -228,12 +228,12 @@ gettaskconf(){
 	elif [ -e "$RCSITEDIR/common/tasks/${RCTASKNAME}.sh" ]
 	then
 		RCSCRIPTPATH="$RCSITEDIR/common/tasks/${RCTASKNAME}.sh"
-	elif [ -e "$RCROOT/defaultsite/tasks/${RCTASKNAME}" ]
+	elif [ -e "$RCROOT/defaults/tasks/${RCTASKNAME}" ]
 	then
-		RCSCRIPTPATH="$RCROOT/defaultsite/tasks/${RCTASKNAME}"
-	elif [ -e "$RCROOT/defaultsite/tasks/${RCTASKNAME}.sh" ]
+		RCSCRIPTPATH="$RCROOT/defaults/tasks/${RCTASKNAME}"
+	elif [ -e "$RCROOT/defaults/tasks/${RCTASKNAME}.sh" ]
 	then
-		RCSCRIPTPATH="$RCROOT/defaultsite/tasks/${RCTASKNAME}.sh"
+		RCSCRIPTPATH="$RCROOT/defaults/tasks/${RCTASKNAME}.sh"
 	else
 		errorout "Unable to locate task \"$RCTASKNAME\", maybe it's a job?"
 	fi

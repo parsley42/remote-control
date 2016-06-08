@@ -10,46 +10,61 @@ Usage:
 rc - Run a remote shell script/command over ssh on one or more hosts,
 	 optionally with elevated privileges.
 
-rc list sites
+rc list / rclist:
+rclist sites
 	List all sites
-rc list tasks (<site>|user)
+rclist tasks (<site>|user)
 	List tasks
-rc list hostgroups
+rclist hostgroups
 	List hostgroups for the current site
-rc list hostgroup <group>
+rclist hostgroup <group>
 	List all hosts in group <group>
-rc list jobs (site)
+rclist jobs (site)
 	List all jobs for the current or specified site
-rc (options) cmd "<command>" (hostspec)
+
+rc cmd / rccmd:
+rccmd (options) "<command>" (hostspec)
 	Run a single command
-rc (options) job <jobname> <joboptions> <jobargs>
-	Wrapper for exec'ing jobs/<job>
-rc (options) <task> (taskoptions) (taskarguments) (hostspec)
+
+rc run / rcrun:
+rcrun (options) <job> (help | "var=value" ...)
+	Run a job with the given variables (which may override defaults)
+
+rc resume <jobid> ("var=value" ...)
+
+rc do / rcdo:
+rcdo (options) <task> (taskoptions) (taskarguments) (hostspec)
 	<task> is the name of the task to be run, e.g. 'whois'
 
 	(hostspec) is required for commands or if there is no default hostspec
 		for the task. It can be a single host (or alias), hostgroup, or
-		a space-separated combination of hosts, aliases and hostgroups.
+		a space-separated combination of hosts, aliases and hostgroups
+		enclosed in quotes.
 
-	(options) are options to rc which may override defaults from
-	tasks.conf files
+	(options)
+		-c
+			(jobs only) Require confirmation before job runs
 		-d <file>
-			use <file> for the task .defs (variable definitions) file, possibly
-			overriding a default
+			Specify a .defs file that is evaluated after any/all
+			configured definitions file (for jobs and tasks)
 		-D
-			dry-run, echo the output to be sent but don't send
+			dry-run, echo the output to be sent but don't send (tasks)
 		-h (task)
 			print this help message or task help
 		-H <host> | "<host> <host> ..." | @HOSTGROUP
 			Override a default hostspec for a task
+		-E (lib ... lib)
+			Don't send remote libraries, e.g. -E errtrap.sh
 		-o <dir>
 			Send output from task to <dir>/<hostname>.out
+		-p
+			(jobs only) prompt user for all vars
 		-s <site>
 			Use <site>
 		-S
 			Run multiple hosts in serial (default parallel)
 		-t
-			Set trace debugging during remote execution
+			Set trace debugging during task/job execution
 	(taskoptions)
 		'-h' will give usage for the task
 	(arguments) are any arguments required by the task
@@ -85,16 +100,16 @@ by your tasks.
 
 ## Sites
 
-The rc `sites/` directory is for user content, and should be it's own separate git repository (not sub-module). `defaultsite` contains tasks and jobs that ship with rc; these are mostly examples for reference, though some of them may be useful for your site(s). `sites/common` is for tasks, task configurations, and jobs that are common to all the sites you manage. Other subdirectories of `sites/` are for grouping tasks, jobs and hostgroups. For example:
+rc needs an RCSITEDIR directory for user content, normally it's own git repository. `defaults` contains tasks and jobs that ship with rc; these are mostly examples for reference, though some of them may be useful for your site(s). `$RCSITEDIR/common` is for tasks, task configurations, and jobs that are common to all the sites you manage. Other subdirectories of `$RCSITEDIR/` are for grouping tasks, jobs and hostgroups. For example
 
-* sites/common - might contain a `deploy` task common to all of your sites
-* sites/mysite - might contain an `update` task and hostgroups for your site
-* sites/mylegacysite - might contain an `update` task and hostgroups for your legacy servers
+* $RCSITEDIR/common - might contain a `deploy` task common to all of your sites
+* $RCSITEDIR/mysite - might contain an `update` task and hostgroups for your site
+* $RCSITEDIR/mylegacysite - might contain an `update` task and hostgroups for your legacy servers
 
 When searching for task configuration, tasks, jobs, and definitions files, rc searches in this order:
-* sites/$RCDEFAULTSITE (from ~/.rcsite, RCDEFAULTSITE environment variable, or -s option)
-* sites/common
-* defaultsite
+* $RCSITEDIR/$RCDEFAULTSITE (from ~/.rcsite, RCDEFAULTSITE environment variable, or -s option)
+* $RCSITEDIR/common
+* defaults
 
 ## Definitions files
 

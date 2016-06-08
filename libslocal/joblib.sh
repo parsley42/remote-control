@@ -25,7 +25,7 @@ catjob(){
 	fi
 	# Now include all .defs files, which may have definitions that expand
 	# variables from above.
-	for RCJOBDEFPATH in "$RCROOT/defaultsite" "$RCSITEDIR/common" "$RCSITEDIR/$RCDEFAULTSITE"
+	for RCJOBDEFPATH in "$RCROOT/defaults" "$RCSITEDIR/common" "$RCSITEDIR/$RCDEFAULTSITE"
     do
         if [ -e "$RCJOBDEFPATH/jobdefs/${RCDEFSNAME}.defs" ]
         then

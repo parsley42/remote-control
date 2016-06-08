@@ -1,6 +1,7 @@
 #!/bin/bash -e
 # rc - remote control w/ ssh, for general-purpose task and job automation
 
+#set -x
 RCDIR=$(dirname `readlink -f $0`)
 RCROOT=$(dirname $RCDIR)
 
@@ -10,15 +11,22 @@ RCSSHOPTS="-o ConnectTimeout=5"
 [ -n "$RCDEFAULTSITE" ] && RCSAVESITE=$RCDEFAULTSITE
 [ -n "$RCSITEDIR" ] && RCSAVESITEDIR=$RCSITEDIR
 
-# Source global then local config, so that local overrides global
+# Source global, local, then user config, so that more specific overrides more global
 [ -e /etc/rcconfig ] && source /etc/rcconfig
+[ -e /usr/local/etc/rcconfig ] && source /usr/local/etc/rcconfig
 [ -e ~/.rcconfig ] && source ~/.rcconfig
 
 [ -n "$RCSAVESITE" ] && RCDEFAULTSITE="$RCSAVESITE"
 [ -n "$RCSAVESITEDIR" ] && RCSITEDIR="$RCSAVESITEDIR"
 
-# Location of the local sites directory, defaults to in-tree
-[ -z "$RCSITEDIR" ] && RCSITEDIR=$RCROOT/sites
+# Location of the local sites directory
+if [ -z "$RCSITEDIR" ]
+then
+	echo "No RCSITEDIR set" >&2
+	exit 1
+fi
+
+RCDATADIR="$RCSITEDIR/$RCDEFAULTSITE/data"
 
 # Default temporary script dir to $HOME if unconfigured, probably just for
 # bootstrapping (install). Since CentOS7 and presumably other distros
@@ -68,26 +76,30 @@ Usage:
 rc - Run a remote shell script/command over ssh on one or more hosts,
 	 optionally with elevated privileges.
 
-rc list sites
+rc list / rclist:
+rclist sites
 	List all sites
-rc list tasks (<site>|user)
+rclist tasks (<site>|user)
 	List tasks
-rc list hostgroups
+rclist hostgroups
 	List hostgroups for the current site
-rc list hostgroup <group>
+rclist hostgroup <group>
 	List all hosts in group <group>
-rc list jobs (site)
+rclist jobs (site)
 	List all jobs for the current or specified site
 
-rc cmd (options) "<command>" (hostspec)
+rc cmd / rccmd:
+rccmd (options) "<command>" (hostspec)
 	Run a single command
+
+rc run / rcrun:
+rcrun (options) <job> (help | "var=value" ...)
+	Run a job with the given variables (which may override defaults)
 
 rc resume <jobid> ("var=value" ...)
 
-rc run (options) <job> (help | "var=value" ...)
-	Run a job with the given variables (which may override defaults)
-
-rc do (options) <task> (taskoptions) (taskarguments) (hostspec)
+rc do / rcdo:
+rcdo (options) <task> (taskoptions) (taskarguments) (hostspec)
 	<task> is the name of the task to be run, e.g. 'whois'
 
 	(hostspec) is required for commands or if there is no default hostspec
@@ -235,7 +247,7 @@ case $RCSUBCMD in
 			# Note that .rcconfig has already been sourced, message here is for informational purposes
 			[ -e ~/.rcconfig ] && echo "Sourcing ~/.rcconfig"
 			# Locate the job script
-			for RCJOBDIR in $RCSITEDIR/$RCDEFAULTSITE $RCSITEDIR/common $RCROOT/defaultsite
+			for RCJOBDIR in $RCSITEDIR/$RCDEFAULTSITE $RCSITEDIR/common $RCROOT/defaults
 			do
 				RCJOBSCRIPT="$RCJOBDIR/jobs/$RCJOB"
 				if [ -e "$RCJOBSCRIPT" ]
@@ -244,7 +256,7 @@ case $RCSUBCMD in
 					RCCONFIGLINE=$(grep -h "^#RCCONFIG:" "$RCJOBSCRIPT" || :)
 					[ -n "$RCCONFIGLINE" ] && eval ${RCCONFIGLINE#*:}
 					[ "$RCREQUIRECONFIRM" = "true" -a -z "$RCCONFIRMCODE" ] && RCCONFIRMCODE=$(generateid)
-					for RCJOBDEFPATH in "$RCROOT/defaultsite" "$RCSITEDIR/common" "$RCSITEDIR/$RCDEFAULTSITE"
+					for RCJOBDEFPATH in "$RCROOT/defaults" "$RCSITEDIR/common" "$RCSITEDIR/$RCDEFAULTSITE"
 					do
 						if [ -e "$RCJOBDEFPATH/jobdefs/${RCDEFSNAME}.defs" ]
 						then
@@ -295,7 +307,7 @@ case $RCSUBCMD in
 		else
 			RCJOBHELP="help"
 		fi
-		export RCROOT RCDEFAULTSITE RCJOBID RCJOB RCJOBSCRIPT
+		export RCROOT RCDEFAULTSITE RCJOBID RCJOB RCJOBSCRIPT RCDATADIR
 		[ -z "$RCJOBHELP" ] && writeresumefile
 		if [ -z "$RCDRYRUN" ]
 		then
@@ -315,7 +327,7 @@ case $RCSUBCMD in
 		case "$RCARG1" in
 			jobs)
 				RCDEFAULTSITE=${RCARG2:-$RCDEFAULTSITE}
-				for SITE in "$RCSITEDIR/$RCDEFAULTSITE" $RCSITEDIR/common $RCROOT/defaultsite
+				for SITE in "$RCSITEDIR/$RCDEFAULTSITE" $RCSITEDIR/common $RCROOT/defaults
 				do
 					RCJOBLIST=$(ls -A $SITE/jobs/ 2>/dev/null || :)
 					[ -n "$RCJOBLIST" ] && echo -e "### Jobs for $SITE:\n$RCJOBLIST"
@@ -328,11 +340,13 @@ case $RCSUBCMD in
 				listsitetasks $RCARG2
 				[ -n "$RCARG2" ] && exit 0
 				listsitetasks common
-				listsitetasks defaultsite
+				listsitetasks defaults
 				exit 0
 				;;
 			sites)
+				echo "RCSITEDIR is $RCSITEDIR; sites:"
 				ls -d $RCSITEDIR/* | xargs basename -a
+				echo "Default is: $RCDEFAULTSITE"
 				exit 0
 				;;
 			hostgroups)
@@ -462,7 +476,7 @@ then
 			[ ! -e "$RCPASSPIPE" ] && mkfifo -m 0600 "$RCPASSPIPE" || :
 			while [ -z "$RCSUDOPASS" ]
 			do
-				read -t 1 RCSUDOPASS <> "$RCPASSPIPE" || $RCROOT/scripts/passdaemon
+				read -t 1 RCSUDOPASS <> "$RCPASSPIPE" || $RCROOT/bin/passdaemon
 			done
 		fi
 		if [ -z "$RCSUDOPASS" ]

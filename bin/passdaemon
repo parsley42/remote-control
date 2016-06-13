@@ -21,11 +21,12 @@ EOF
 # Source error functions
 . $RCROOT/libslocal/errhandle.sh
 
-if [ -e ~/.rcconfig ]
-then
-	. ~/.rcconfig
-	[ -z "$RCPASSPIPE" ] && errorout "RCPASSPIPE not defined in ~/.rcconfig"
-fi
+# Source global, local, then user config, so that more specific overrides more global
+[ -e /etc/rcconfig ] && source /etc/rcconfig
+[ -e /usr/local/etc/rcconfig ] && source /usr/local/etc/rcconfig
+[ -e ~/.rcconfig ] && source ~/.rcconfig
+
+[ -z "$RCPASSPIPE" ] && errorout "RCPASSPIPE not defined"
 
 if [ -e "$RCPASSPIPE" ]
 then # Make sure it's kosher

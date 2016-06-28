@@ -456,7 +456,7 @@ fi
 # Create the SETSTRING for passing arguments to the remote host
 if [ $# -gt 0 -a -z "$RCCOMMAND" ]
 then
-	SETSTRING="set -- \"$1\""
+	SETSTRING="\"$1\""
 	shift
 	while [ -n "$1" ]
 	do

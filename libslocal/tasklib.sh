@@ -57,28 +57,38 @@ piper(){
 				;;
 		esac
 	fi
-	echo "set -e"
 	RCTASKID=$(generateid)
-	[ -n "$RCTRACE" ] && echo "set -x"
-	# Set the task ID
-	echo "RCTASKID=$RCTASKID"
-	# Send libraries for remote use
-	for RCREMOTELIB in errtrap.sh status.sh
-	do
-		if ! echo " $RCEXCLUDELIBS " | grep -q " $RCREMOTELIB "
-		then
-			cat $RCROOT/libsremote/$RCREMOTELIB
-		fi
-	done
-	# Send variable definitions
-	taskdefs $RCHOST $RCTASK
-	# Set the positional values, options and arguments
-	[ -n "$SETSTRING" ] && echo "$SETSTRING" || :
-	echo "echo $RCTASKID task starting on $RCHOST: $(basename $RCSCRIPT) >&2"
-	# Make note of the line before the script starts
-	echo "RCFIRSTLINE=\$LINENO"
+	if [ -n "$RCINTERPRETER" ]
+	then # For custom interpreter, we send only the script, no var defs
+		echo "$RCINTERPRETER -- - $SETSTRING <<\"RCINTERPRETEREOF\""
+	else # bash scripts get a lot more
+		echo "set -e"
+		[ -n "$RCTRACE" ] && echo "set -x"
+		# Set the task ID
+		echo "RCTASKID=$RCTASKID"
+		# Send libraries for remote use
+		for RCREMOTELIB in errtrap.sh status.sh
+		do
+			if ! echo " $RCEXCLUDELIBS " | grep -q " $RCREMOTELIB "
+			then
+				cat $RCROOT/libsremote/$RCREMOTELIB
+			fi
+		done
+		# Send variable definitions
+		taskdefs $RCHOST $RCTASK
+		# Set the positional values, options and arguments
+		[ -n "$SETSTRING" ] && echo "set -- $SETSTRING" || :
+		echo "echo $RCTASKID task starting on $RCHOST: $(basename $RCSCRIPT) >&2"
+		# Make note of the line before the script starts
+		echo "RCFIRSTLINE=\$LINENO"
+	fi
 	# Finally, run the task
 	cat $RCSCRIPTPATH
+	# If a custom interpreter was used, close the heredoc
+	if [ -n "$RCINTERPRETER" ]
+	then
+		echo "RCINTERPRETEREOF"
+	fi
 	# Close the sudo verbatim heredoc started in sudosetup.sh
 	if [ -n "$RCELEVATE" ]
 	then

@@ -1,0 +1,8 @@
+#!/bin/bash
+read -t 1 RCSUDOPASS <> ~/.rc.pass
+if [ $? -eq 0 ]
+then
+	echo "$RCSUDOPASS"
+else
+	echo "Couldn't read password" >&2
+fi

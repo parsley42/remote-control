@@ -26,3 +26,4 @@ do
 	ln -snf $RCDIR/rc $INSTALLDIR/$RCLINK
 done
 ln -snf $RCDIR/passdaemon $INSTALLDIR/passdaemon
+ln -snf $RCDIR/readpass $INSTALLDIR/readpass

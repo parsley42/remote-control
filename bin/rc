@@ -69,7 +69,7 @@ RCSCRIPTOPTS=":h"
 RCREQUIREDARGS=0
 
 # Options string for rc
-RCOPTS=":cd:DE:hH:o:ps:St"
+RCOPTS=":cd:DeE:hH:o:ps:St"
 usage(){
 	cat >&2 <<EOF
 Usage:
@@ -115,12 +115,14 @@ rcdo (options) <task> (taskoptions) (taskarguments) (hostspec)
 			configured definitions file (for jobs and tasks)
 		-D
 			dry-run, echo the output to be sent but don't send (tasks)
+		-e
+			Elevation required
+		-E (lib ... lib)
+			Don't send remote libraries, e.g. -E errtrap.sh
 		-h (task)
 			print this help message or task help
 		-H <host> | "<host> <host> ..." | @HOSTGROUP
 			Override a default hostspec for a task
-		-E (lib ... lib)
-			Don't send remote libraries, e.g. -E errtrap.sh
 		-o <dir>
 			Send output from task to <dir>/<hostname>.out
 		-p
@@ -184,6 +186,9 @@ case $OPT in
 		;;
 	D)
 		RCDRYRUN=true
+		;;
+	e)
+		RCELEVATE=true
 		;;
 	o)
 		if [ ! -d ${OPTARG} ]
@@ -529,6 +534,16 @@ do
 	fi
 done
 
+# This is a wee bit hacky - if we need to elevate for a single command,
+# run the whole thing through piper with a special argument to let it
+# know that it should use the contents of RCTASKNAME for the script.
+if [ -n "$RCCOMMAND" -a "$RCELEVATE" = "true" ]
+then
+	RCTASKNAME="$RCCOMMAND"
+	RCSCRIPT="n/a"
+	RCPIPERARGS="-c"
+fi
+
 # Now do the tasks
 for RCREMOTE in $RCEXECHOSTS
 do
@@ -551,7 +566,7 @@ do
 		then
 			if [ -n "$RCSCRIPT" ]
 			then
-				piper $RCNICENAME $RCTASKNAME $* | (
+				piper $RCPIPERARGS $RCNICENAME "$RCTASKNAME" $* | (
 					connect $RCREMOTE > $RCOUTPUTDIR/$RCREMOTE.out 2> $RCOUTPUTDIR/$RCREMOTE.err
 					hosterrorcheck
 				) &
@@ -568,10 +583,10 @@ do
 		else
 			if [ -z "$RCOUTPUTDIR" ]
 			then
-				[ -n "$RCSCRIPT" ] && { piper $RCNICENAME $RCTASKNAME $* | connect $RCREMOTE; hosterrorcheck; }
+				[ -n "$RCSCRIPT" ] && { piper $RCPIPERARGS $RCNICENAME "$RCTASKNAME" $* | connect $RCREMOTE; hosterrorcheck; }
 				[ -n "$RCCOMMAND" ] && { connect $RCREMOTE "$RCCOMMAND $*"; hosterrorcheck; }
 			else
-				[ -n "$RCSCRIPT" ] && { piper $RCNICENAME $RCTASKNAME $* | connect $RCREMOTE > $RCOUTPUTDIR/$RCREMOTE.out 2> $RCOUTPUTDIR/$RCREMOTE.err; hosterrorcheck; }
+				[ -n "$RCSCRIPT" ] && { piper $RCPIPERARGS $RCNICENAME "$RCTASKNAME" $* | connect $RCREMOTE > $RCOUTPUTDIR/$RCREMOTE.out 2> $RCOUTPUTDIR/$RCREMOTE.err; hosterrorcheck; }
 				[ -n "$RCCOMMAND" ] && { connect $RCREMOTE "$RCCOMMAND $*" > $RCOUTPUTDIR/$RCREMOTE.out 2> $RCOUTPUTDIR/$RCREMOTE.err; hosterrorcheck; }
 			fi
 		fi

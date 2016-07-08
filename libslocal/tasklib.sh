@@ -16,8 +16,14 @@ connect(){
 # Piper generates the input to ssh, which amounts to a shell script run
 # in immediate mode
 piper(){
+	local RCCMDELEVATE
+	if [ "$1" = "-c" ]
+	then
+		RCCMDELEVATE="true"
+		shift
+	fi
 	local RCHOST=$1
-	local RCTASK=$2
+	local RCTASK="$2"
 	shift 2
 	if [ "$RCHOST" = "localhost" ]
 	then
@@ -83,7 +89,12 @@ piper(){
 		echo "RCFIRSTLINE=\$LINENO"
 	fi
 	# Finally, run the task
-	cat $RCSCRIPTPATH
+	if [ "$RCCMDELEVATE" = "true" ]
+	then
+		echo "$RCTASK"
+	else
+		cat $RCSCRIPTPATH
+	fi
 	# If a custom interpreter was used, close the heredoc
 	if [ -n "$RCINTERPRETER" ]
 	then

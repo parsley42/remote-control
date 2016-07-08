@@ -69,7 +69,7 @@ RCSCRIPTOPTS=":h"
 RCREQUIREDARGS=0
 
 # Options string for rc
-RCOPTS=":cd:DeE:hH:o:ps:St"
+RCOPTS=":cd:DeE:hH:no:ps:St"
 usage(){
 	cat >&2 <<EOF
 Usage:
@@ -123,6 +123,11 @@ rcdo (options) <task> (taskoptions) (taskarguments) (hostspec)
 			print this help message or task help
 		-H <host> | "<host> <host> ..." | @HOSTGROUP
 			Override a default hostspec for a task
+		-n
+			No pre-scan - skip connecting in serial, normally used
+			for prompting the user to accept ssh keys. This is useful
+			for commands that connect to a lot of hosts that you know
+			are in known_hosts.
 		-o <dir>
 			Send output from task to <dir>/<hostname>.out
 		-p
@@ -189,6 +194,9 @@ case $OPT in
 		;;
 	e)
 		RCELEVATE=true
+		;;
+	n)
+		RCSKIPSCAN=true
 		;;
 	o)
 		if [ ! -d ${OPTARG} ]
@@ -521,18 +529,23 @@ fi
 set +e
 trap - ERR
 
-for RCREMOTE in $RCEXECHOSTS
-do
-	if [ "$RCREMOTE" != "localhost" ]
-	then
-		ssh $RCSSHOPTS -T $RCREMOTE "exit"
-		RETVAL=$?
-		if [ $RETVAL -eq 255 ]
+# Pre-scan hosts to prompt user to accept host keys for new keys. Can
+# be skipped with -n
+if [ -z "$RCSKIPSCAN" ]
+then
+	for RCREMOTE in $RCEXECHOSTS
+	do
+		if [ "$RCREMOTE" != "localhost" ]
 		then
-			errorout "Unable to connect to host $RCREMOTE"
+			ssh $RCSSHOPTS -T $RCREMOTE "exit"
+			RETVAL=$?
+			if [ $RETVAL -eq 255 ]
+			then
+				errorout "Unable to connect to host $RCREMOTE"
+			fi
 		fi
-	fi
-done
+	done
+fi
 
 # This is a wee bit hacky - if we need to elevate for a single command,
 # run the whole thing through piper with a special argument to let it

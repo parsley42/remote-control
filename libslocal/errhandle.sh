@@ -13,7 +13,7 @@ func_error_handler(){
 	echo "$0 exiting on error in function $1: \"$2\" at line $3, exit code $4." >&2
 }
 functrap(){
-	trap 'func_error_handler ${FUNCNAME[0]} "${BASH_COMMAND}" $LINENO $?' ERR
+	trap 'func_error_handler "${FUNCNAME[0]}" "${BASH_COMMAND}" $LINENO $?' ERR
 }
 
 # Since jobs are cat'ed to /bin/bash, we want useful error messages

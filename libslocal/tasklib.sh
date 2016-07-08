@@ -101,9 +101,6 @@ piper(){
 
 hosterrorcheck(){
 	RCRETVAL=$?
-	# Turn error trapping back on
-	set -e
-	trap 'error_handler "${BASH_COMMAND}" ${LINENO} $?' ERR
 	if [ $RCRETVAL -ne 0 ]
 	then
 		if [ $RCRETVAL -eq 255 ]

@@ -35,7 +35,6 @@ resolvehostalias(){
 }
 
 hostnicename(){
-	functrap
 	local MATCHHOST=$1
 	[ ! -d "$RCSITEDIR/$RCDEFAULTSITE/hostgroups" ] && { RCNICENAME=$MATCHHOST; return 0; }
 	if [ -n "$(ls -A "$RCSITEDIR/$RCDEFAULTSITE/hostgroups/")" ]

@@ -23,8 +23,8 @@
 #ADMINMAIL:^[a-z_\d\.-]+\@[\da-z\.-]+\.[a-z\.]{2,6}$|::From address on notifications, address to send sysadmin reports to
 #FORCE:false|true:false:Patch host even when not required if set to "true"
 #PRENOTIFY:false|true:false:Send notification before patching when set "true"
-#NOTIFYWHEN:.*::When to send notification ('at' timespec)
-#PATCHWHEN:.*::When to patch the host ('at' timespec)
+#NOTIFYWHEN:.*::When to send notification ('at' timespec, e.g. 2am Wednesday)
+#PATCHWHEN:.*::When to patch the host ('at' timespec, e.g. 2am Wednesday)
 #CONTACT:^[a-z_\d\.-]+\@[\da-z\.-]+\.[a-z\.]{2,6}$::Contact for the host that receives notifications
 #PATCHHOST:[\da-z\.-]+::The host to be patched
 # *** end of rc metadata

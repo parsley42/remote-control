@@ -555,6 +555,7 @@ then
 	RCTASKNAME="$RCCOMMAND"
 	RCSCRIPT="n/a"
 	RCPIPERARGS="-c"
+	unset RCCOMMAND
 fi
 
 # Now do the tasks
@@ -565,8 +566,8 @@ do
 	then
 		echo "*** DRY RUN ***" >&2
 		echo "*** Sending \"$RCTASKNAME\" to $RCNICENAME" >&2
-		[ -n "$RCCOMMAND" ] && echo "$RCCOMMAND $*"
-		[ -n "$RCSCRIPT" ] && piper $RCNICENAME $RCTASKNAME $*
+		[ -n "$RCCOMMAND" -a -z "$RCSCRIPT" ] && echo "$RCCOMMAND $*"
+		[ -n "$RCSCRIPT" ] && piper $RCPIPERARGS $RCNICENAME $RCTASKNAME $*
 	else
 		echo "*** Sending \"$RCTASKNAME\" to $RCNICENAME" >&2
 		if [ "$RCREMOTE" = "localhost" ]

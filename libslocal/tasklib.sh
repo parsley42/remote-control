@@ -20,6 +20,7 @@ piper(){
 	if [ "$1" = "-c" ]
 	then
 		RCCMDELEVATE="true"
+		RCSCRIPT="$3"
 		shift
 	fi
 	local RCHOST=$1

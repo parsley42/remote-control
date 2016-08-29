@@ -12,9 +12,10 @@ RCSSHOPTS="-o ConnectTimeout=5"
 [ -n "$RCSITEDIR" ] && RCSAVESITEDIR=$RCSITEDIR
 
 # Source global, local, then user config, so that more specific overrides more global
-[ -e /etc/rcconfig ] && source /etc/rcconfig
-[ -e /usr/local/etc/rcconfig ] && source /usr/local/etc/rcconfig
-[ -e ~/.rcconfig ] && source ~/.rcconfig
+[ -e /etc/rcconfig ] && { source /etc/rcconfig; RCCONFIG=" /etc/rcconfig"; }
+[ -e /usr/local/etc/rcconfig ] && { source /usr/local/etc/rcconfig; RCCONFIG="$RCCONFIG /usr/local/etc/rcconfig"; }
+[ -e ~/.rcconfig ] && { source ~/.rcconfig; RCCONFIG="$RCCONFIG ~/.rcconfig"; }
+RCCONFIG=${RCCONFIG# }
 
 [ -n "$RCSAVESITE" ] && RCDEFAULTSITE="$RCSAVESITE"
 [ -n "$RCSAVESITEDIR" ] && RCSITEDIR="$RCSAVESITEDIR"
@@ -141,6 +142,10 @@ rcdo (options) <task> (taskoptions) (taskarguments) (hostspec)
 	(taskoptions)
 		'-h' will give usage for the task
 	(arguments) are any arguments required by the task
+
+Configuration found in: $RCCONFIG
+RCSITEDIR is $RCSITEDIR
+RCDEFAULTSITE is $RCDEFAULTSITE
 EOF
 	exit 1
 }

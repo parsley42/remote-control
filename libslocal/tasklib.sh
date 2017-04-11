@@ -85,7 +85,7 @@ piper(){
 		taskdefs $RCHOST $RCTASK
 		# Set the positional values, options and arguments
 		[ -n "$SETSTRING" ] && echo "set -- $SETSTRING" || :
-		echo "echo $RCTASKID task starting on $RCHOST: $(basename $RCSCRIPT) >&2"
+		[ -z "$RCQUIET" ] && echo "echo $RCTASKID task starting on $RCHOST: $(basename $RCSCRIPT) >&2"
 		# Make note of the line before the script starts
 		echo "RCFIRSTLINE=\$LINENO"
 	fi

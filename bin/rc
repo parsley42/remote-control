@@ -217,6 +217,7 @@ case $OPT in
 		;;
 	q)
 		RCQUIET="true"
+		RCSSHOPTS="$RCSSHOPTS -q"
 		;;
 	s)
 		RCDEFAULTSITE=${OPTARG}
